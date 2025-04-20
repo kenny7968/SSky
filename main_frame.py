@@ -9,6 +9,8 @@ SSky - Blueskyクライアント
 import wx
 import wx.lib.dialogs
 import logging
+import os
+import mimetypes
 from timeline_view import TimelineView
 from atproto import Client
 from atproto.exceptions import AtProtocolError
@@ -276,12 +278,137 @@ class MainFrame(wx.Frame):
             wx.MessageBox("投稿するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
             return
             
-        dlg = wx.TextEntryDialog(self, "投稿内容を入力:", "新規投稿")
+        # カスタムダイアログの作成
+        dlg = wx.Dialog(self, title="新規投稿（Ctrl+Enterで送信）", size=(500, 300))
+        
+        # レイアウト
+        panel = wx.Panel(dlg)
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # 投稿内容入力エリア
+        content_label = wx.StaticText(panel, label="投稿内容:")
+        main_sizer.Add(content_label, 0, wx.ALL | wx.EXPAND, 5)
+        
+        content_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE)
+        content_ctrl.Bind(wx.EVT_CHAR_HOOK, lambda evt, dlg=dlg, ctrl=content_ctrl: self.on_post_key_down(evt, dlg, ctrl))
+        main_sizer.Add(content_ctrl, 1, wx.ALL | wx.EXPAND, 5)
+        
+        # 添付ファイル関連のコントロール
+        attachment_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # 添付ファイルのリスト（最大4つまで）
+        self.attachment_files = []
+        self.attachment_labels = []
+        
+        # 画像添付ボタン
+        image_btn = wx.Button(panel, label="画像を添付", size=(120, -1))
+        image_btn.Bind(wx.EVT_BUTTON, lambda evt, dlg=dlg: self.on_attach_image(evt, dlg))
+        attachment_sizer.Add(image_btn, 0, wx.ALL, 5)
+        
+        # 添付ファイル表示エリア
+        attachment_label = wx.StaticText(panel, label="添付ファイル: なし")
+        self.attachment_labels.append(attachment_label)
+        attachment_sizer.Add(attachment_label, 1, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        
+        main_sizer.Add(attachment_sizer, 0, wx.EXPAND | wx.ALL, 5)
+        
+        # ボタン
+        button_sizer = wx.StdDialogButtonSizer()
+        post_button = wx.Button(panel, wx.ID_OK, "投稿")
+        cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
+        button_sizer.AddButton(post_button)
+        button_sizer.AddButton(cancel_button)
+        button_sizer.Realize()
+        main_sizer.Add(button_sizer, 0, wx.ALL | wx.CENTER, 10)
+        
+        panel.SetSizer(main_sizer)
+        
+        # ダイアログ表示
         if dlg.ShowModal() == wx.ID_OK:
-            post_content = dlg.GetValue()
+            post_content = content_ctrl.GetValue()
             if post_content:
-                wx.MessageBox(f"投稿しました: {post_content}", "投稿完了", wx.OK | wx.ICON_INFORMATION)
-                self.statusbar.SetStatusText("投稿が完了しました")
+                try:
+                    # 投稿処理
+                    self.statusbar.SetStatusText("投稿中...")
+                    
+                    # 添付ファイルがある場合
+                    if self.attachment_files:
+                        # 画像ファイルをアップロード
+                        uploaded_blobs = []
+                        for file_path in self.attachment_files:
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    file_data = f.read()
+                                    
+                                # ファイルの種類を判定
+                                import mimetypes
+                                mime_type, _ = mimetypes.guess_type(file_path)
+                                if not mime_type:
+                                    mime_type = 'application/octet-stream'
+                                
+                                # ファイルをアップロード
+                                # Bluesky APIのメソッド名は実際のSDKに合わせて調整が必要かもしれません
+                                blob = self.client.upload_blob(file_data, mime_type)
+                                uploaded_blobs.append(blob)
+                                
+                            except Exception as e:
+                                logger.error(f"ファイルのアップロードに失敗しました: {str(e)}")
+                                wx.MessageBox(f"ファイルのアップロードに失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                                self.statusbar.SetStatusText("投稿に失敗しました")
+                                dlg.Destroy()
+                                return
+                        
+                        # 画像付きで投稿
+                        self.client.send_post(text=post_content, images=uploaded_blobs)
+                    else:
+                        # テキストのみ投稿
+                        self.client.send_post(text=post_content)
+                    
+                    # 投稿成功
+                    wx.MessageBox("投稿が完了しました", "投稿完了", wx.OK | wx.ICON_INFORMATION)
+                    self.statusbar.SetStatusText("投稿が完了しました")
+                    
+                    # タイムラインを更新
+                    self.timeline.fetch_timeline(self.client)
+                    
+                except Exception as e:
+                    logger.error(f"投稿に失敗しました: {str(e)}")
+                    wx.MessageBox(f"投稿に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                    self.statusbar.SetStatusText("投稿に失敗しました")
+            else:
+                wx.MessageBox("投稿内容を入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+        
+        dlg.Destroy()
+    
+    def on_attach_image(self, event, parent_dlg):
+        """画像添付ダイアログを表示"""
+        # すでに4つのファイルが添付されている場合
+        if len(self.attachment_files) >= 4:
+            wx.MessageBox("添付できるファイルは最大4つまでです", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        # ファイル選択ダイアログを表示
+        wildcard = "画像ファイル (*.jpg;*.jpeg;*.png;*.gif)|*.jpg;*.jpeg;*.png;*.gif"
+        dlg = wx.FileDialog(
+            parent_dlg, 
+            message="画像ファイルを選択してください",
+            defaultDir="", 
+            defaultFile="",
+            wildcard=wildcard,
+            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST
+        )
+        
+        if dlg.ShowModal() == wx.ID_OK:
+            file_path = dlg.GetPath()
+            self.attachment_files.append(file_path)
+            
+            # 添付ファイルラベルを更新
+            file_names = [os.path.basename(f) for f in self.attachment_files]
+            self.attachment_labels[0].SetLabel(f"添付ファイル: {', '.join(file_names)}")
+            
+            # レイアウトを更新
+            parent_dlg.Layout()
+            
         dlg.Destroy()
     
     def on_like(self, event):
@@ -329,6 +456,70 @@ class MainFrame(wx.Frame):
     def on_settings(self, event):
         """設定ダイアログを表示"""
         wx.MessageBox("設定ダイアログ（未実装）", "設定", wx.OK | wx.ICON_INFORMATION)
+    
+    def on_post_key_down(self, event, dlg, content_ctrl):
+        """投稿入力フォームでのキー入力処理"""
+        key_code = event.GetKeyCode()
+        ctrl_down = event.ControlDown()
+        
+        # Ctrl+Enterが押された場合
+        if ctrl_down and key_code == wx.WXK_RETURN:
+            # 投稿内容を取得
+            post_content = content_ctrl.GetValue()
+            if post_content:
+                try:
+                    # 投稿処理
+                    self.statusbar.SetStatusText("投稿中...")
+                    
+                    # 添付ファイルがある場合
+                    if self.attachment_files:
+                        # 画像ファイルをアップロード
+                        uploaded_blobs = []
+                        for file_path in self.attachment_files:
+                            try:
+                                with open(file_path, 'rb') as f:
+                                    file_data = f.read()
+                                    
+                                # ファイルの種類を判定
+                                mime_type, _ = mimetypes.guess_type(file_path)
+                                if not mime_type:
+                                    mime_type = 'application/octet-stream'
+                                
+                                # ファイルをアップロード
+                                blob = self.client.upload_blob(file_data, mime_type)
+                                uploaded_blobs.append(blob)
+                                
+                            except Exception as e:
+                                logger.error(f"ファイルのアップロードに失敗しました: {str(e)}")
+                                wx.MessageBox(f"ファイルのアップロードに失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                                self.statusbar.SetStatusText("投稿に失敗しました")
+                                return
+                        
+                        # 画像付きで投稿
+                        self.client.send_post(text=post_content, images=uploaded_blobs)
+                    else:
+                        # テキストのみ投稿
+                        self.client.send_post(text=post_content)
+                    
+                    # 投稿成功
+                    wx.MessageBox("投稿が完了しました", "投稿完了", wx.OK | wx.ICON_INFORMATION)
+                    self.statusbar.SetStatusText("投稿が完了しました")
+                    
+                    # タイムラインを更新
+                    self.timeline.fetch_timeline(self.client)
+                    
+                    # ダイアログを閉じる（wx.ID_CANCELを使用して、on_new_postでの二重投稿を防止）
+                    dlg.EndModal(wx.ID_CANCEL)
+                    
+                except Exception as e:
+                    logger.error(f"投稿に失敗しました: {str(e)}")
+                    wx.MessageBox(f"投稿に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                    self.statusbar.SetStatusText("投稿に失敗しました")
+            else:
+                wx.MessageBox("投稿内容を入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+        else:
+            # 通常のキー処理を継続
+            event.Skip()
     
     def on_delete(self, event):
         """投稿削除アクション"""
