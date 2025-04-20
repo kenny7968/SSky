@@ -1,0 +1,33 @@
+# .github/workflows/pre-commit.yml
+
+name: Pre-commit Checks
+
+# ワークフローが実行されるトリガーを指定
+on:
+  push:
+    branches: [main, master, develop]
+
+  pull_request:
+    branches: [main, master, develop]
+
+  workflow_dispatch:
+
+jobs:
+  pre-commit:
+    name: Run pre-commit checks
+    runs-on: ubuntu-latest
+    steps:
+      # 1. リポジトリのコードをチェックアウト
+      - name: Check out code
+        uses: actions/checkout@v4 # バージョンは最新を確認してください
+
+      # 2. Python 環境をセットアップ (pre-commit 自体や Python ベースのフックに必要)
+      - name: Set up Python
+        uses: actions/setup-python@v5 # バージョンは最新を確認してください
+        with:
+          # フックに必要な Python バージョンがあれば指定、なければ '3.x' などで十分なことが多い
+          python-version: '3.11'
+
+      # 3. pre-commit action を実行
+      - name: Run pre-commit action
+        uses: pre-commit/action@v3.0.1 # バージョンは最新を確認してください
