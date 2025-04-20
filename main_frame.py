@@ -75,7 +75,7 @@ class MainFrame(wx.Frame):
         
         # アプリメニュー
         app_menu = wx.Menu()
-        self.login_item = app_menu.Append(wx.ID_ANY, "Blueskyにログイン(&A)", "Blueskyにログイン")
+        self.login_item = app_menu.Append(wx.ID_ANY, "ログイン情報の設定(&A)", "Blueskyのログイン情報を設定")
         self.logout_item = app_menu.Append(wx.ID_ANY, "ログアウト(&L)", "Blueskyからログアウト")
         self.logout_item.Enable(False)  # 初期状態では無効
         app_menu.AppendSeparator()  # 区切り線
@@ -122,35 +122,18 @@ class MainFrame(wx.Frame):
         self.SetTitle(f"SSky - [{username}]")
     
     def load_saved_session(self):
-        """保存されたセッション情報を読み込み"""
+        """保存されたログイン情報を読み込み、ログイン処理を実行"""
         try:
-            # セッション情報を読み込み
-            session = self.auth_utils.load_session()
-            if session:
-                # セッションを復元
-                self.client = Client()
-                self.client._session = session
-                
-                # ユーザー情報を取得
-                try:
-                    # セッションが有効かどうかを確認
-                    profile = self.client.app.bsky.actor.getProfile({'actor': session.did})
-                    
-                    # セッションが有効な場合
-                    self.set_username(profile.display_name)
-                    self.statusbar.SetStatusText(f"{profile.display_name}としてログインしました")
-                    self.update_login_status(True)
-                    logger.info(f"保存されたセッションを復元しました: {profile.display_name}")
-                    
-                    # TODO: タイムラインの更新など
-                    
-                except Exception as e:
-                    # セッションが無効な場合
-                    logger.warning(f"保存されたセッションが無効です: {str(e)}")
-                    self.auth_utils.delete_session()
-                    self.client = None
+            # ログイン情報を読み込み
+            username, password = self.auth_utils.load_credentials()
+            if username and password:
+                logger.info(f"保存されたログイン情報を読み込みました: {username}")
+                # ログイン処理を実行
+                self.perform_login(username, password, show_dialog=False)
+            else:
+                logger.debug("保存されたログイン情報がありません")
         except Exception as e:
-            logger.error(f"セッション情報の読み込みに失敗しました: {str(e)}")
+            logger.error(f"ログイン情報の読み込みに失敗しました: {str(e)}")
     
     def update_login_status(self, is_logged_in):
         """ログイン状態に応じてUIを更新"""
@@ -158,9 +141,9 @@ class MainFrame(wx.Frame):
         self.logout_item.Enable(is_logged_in)
     
     def on_login(self, event):
-        """ログインダイアログを表示"""
+        """ログイン情報設定ダイアログを表示"""
         # カスタムダイアログの作成
-        dlg = wx.Dialog(self, title="Blueskyにログイン", size=(400, 200))
+        dlg = wx.Dialog(self, title="ログイン情報の設定", size=(400, 200))
         
         # レイアウト
         panel = wx.Panel(dlg)
@@ -173,14 +156,14 @@ class MainFrame(wx.Frame):
         sizer.Add(username_ctrl, 0, wx.ALL | wx.EXPAND, 5)
         
         # パスワード入力
-        password_label = wx.StaticText(panel, label="パスワード:")
+        password_label = wx.StaticText(panel, label="アプリパスワード:")
         sizer.Add(password_label, 0, wx.ALL | wx.EXPAND, 5)
         password_ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
         sizer.Add(password_ctrl, 0, wx.ALL | wx.EXPAND, 5)
         
         # ボタン
         button_sizer = wx.StdDialogButtonSizer()
-        ok_button = wx.Button(panel, wx.ID_OK, "ログイン")
+        ok_button = wx.Button(panel, wx.ID_OK, "保存")
         cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
         button_sizer.AddButton(ok_button)
         button_sizer.AddButton(cancel_button)
@@ -195,13 +178,18 @@ class MainFrame(wx.Frame):
             password = password_ctrl.GetValue()
             
             if username and password:
-                self.perform_login(username, password)
+                # ログイン情報を保存
+                if self.auth_utils.save_credentials(username, password):
+                    # ログイン処理を実行
+                    self.perform_login(username, password)
+                else:
+                    wx.MessageBox("ログイン情報の保存に失敗しました", "エラー", wx.OK | wx.ICON_ERROR)
             else:
-                wx.MessageBox("ユーザー名とパスワードを入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox("ユーザー名とアプリパスワードを入力してください", "エラー", wx.OK | wx.ICON_ERROR)
         
         dlg.Destroy()
     
-    def perform_login(self, username, password, auth_factor_token=None):
+    def perform_login(self, username, password, show_dialog=True):
         """ログイン処理を実行"""
         try:
             # Blueskyにログイン
@@ -217,37 +205,42 @@ class MainFrame(wx.Frame):
                 logger.debug(f"ログイン成功: プロフィール={profile.display_name}, セッション={type(self.client._session)}")
                 
                 # ログイン成功
-                self.set_username(profile.display_name)
-                self.statusbar.SetStatusText(f"{profile.display_name}としてログインしました")
+                self.set_username(profile.handle)
+                self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
                 self.update_login_status(True)
                 
-                # 成功通知ダイアログを表示
-                wx.MessageBox(f"{profile.display_name}としてログインしました", "ログイン成功", wx.OK | wx.ICON_INFORMATION)
+                # タイムラインの更新
+                self.statusbar.SetStatusText("タイムラインを更新しています...")
+                self.timeline.fetch_timeline(self.client)
+                self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
                 
-                # セッション情報を保存
-                if self.client._session:
-                    logger.debug(f"セッション情報: DID={self.client._session.did}, 型={type(self.client._session)}")
-                    saved = self.auth_utils.save_session(self.client._session.did, self.client._session)
-                    if saved:
-                        logger.info(f"セッション情報を保存しました: {profile.display_name}")
-                    else:
-                        logger.warning("セッション情報の保存に失敗しました")
-                else:
-                    logger.warning("セッションオブジェクトがありません")
-                
-                # TODO: タイムラインの更新など
+                # 成功通知ダイアログを表示（オプション）
+                if show_dialog:
+                    wx.MessageBox(f"{profile.handle}としてログインしました", "ログイン成功", wx.OK | wx.ICON_INFORMATION)
                 
             except Exception as e:
                 # ログイン失敗
                 error_message = f"ログインに失敗しました: {str(e)}\n\n2段階認証を設定しているアカウントは、アプリパスワードを使用してください。"
                 logger.error(f"ログインに失敗しました: {str(e)}")
-                wx.MessageBox(error_message, "ログイン失敗", wx.OK | wx.ICON_ERROR)
+                
+                if show_dialog:
+                    result = wx.MessageBox(error_message, "ログイン失敗", wx.OK | wx.ICON_ERROR)
+                    # OKボタンがクリックされたら、ログイン情報設定ダイアログを表示
+                    if result == wx.OK:
+                        self.on_login(None)
+                
                 self.statusbar.SetStatusText("ログインに失敗しました")
             
         except Exception as e:
             # ログイン失敗
             logger.error(f"ログイン処理中に例外が発生しました: {str(e)}", exc_info=True)
-            wx.MessageBox(f"ログインに失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            
+            if show_dialog:
+                result = wx.MessageBox(f"ログインに失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                # OKボタンがクリックされたら、ログイン情報設定ダイアログを表示
+                if result == wx.OK:
+                    self.on_login(None)
+            
             self.statusbar.SetStatusText("ログインに失敗しました")
     
     
@@ -256,9 +249,8 @@ class MainFrame(wx.Frame):
         if self.client and self.username:
             username = self.username
             
-            # セッション情報を削除
-            if self.client._session:
-                self.auth_utils.delete_session(self.client._session.did)
+            # ログイン情報を削除
+            self.auth_utils.delete_credentials()
             
             # クライアントをリセット
             self.client = None

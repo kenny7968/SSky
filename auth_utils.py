@@ -43,6 +43,16 @@ class AuthUtils:
             )
             ''')
             
+            # credentialsテーブルの作成
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS credentials (
+                id INTEGER PRIMARY KEY,
+                username TEXT,
+                encrypted_password BLOB,
+                created_at TIMESTAMP
+            )
+            ''')
+            
             conn.commit()
             conn.close()
             logger.info("データベースの初期化が完了しました")
@@ -123,106 +133,98 @@ class AuthUtils:
             logger.error(f"データの復号化に失敗しました: {str(e)}", exc_info=True)
             return None
     
-    def save_session(self, user_did, session_obj):
-        """セッション情報を保存"""
+    def save_credentials(self, username, password):
+        """ログイン情報を保存"""
         try:
-            logger.debug(f"保存するセッションオブジェクトの型: {type(session_obj)}")
+            logger.debug(f"ログイン情報を保存します: {username}")
             
-            # セッションオブジェクトを暗号化
-            encrypted_session = self.encrypt_data(session_obj)
-            if not encrypted_session:
-                logger.error("セッションの暗号化に失敗しました")
+            # パスワードを暗号化
+            encrypted_password = self.encrypt_data(password)
+            if not encrypted_password:
+                logger.error("パスワードの暗号化に失敗しました")
                 return False
             
-            logger.debug("セッションの暗号化が完了しました")
+            logger.debug("パスワードの暗号化が完了しました")
             
             # データベースに保存
             try:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 
-                # 既存のセッションを削除
-                cursor.execute("DELETE FROM sessions WHERE user_did = ?", (user_did,))
+                # 既存のログイン情報を削除
+                cursor.execute("DELETE FROM credentials")
                 
-                # 新しいセッションを保存
+                # 新しいログイン情報を保存
                 cursor.execute(
-                    "INSERT INTO sessions (user_did, encrypted_session, created_at) VALUES (?, ?, ?)",
-                    (user_did, encrypted_session, datetime.now().isoformat())
+                    "INSERT INTO credentials (username, encrypted_password, created_at) VALUES (?, ?, ?)",
+                    (username, encrypted_password, datetime.now().isoformat())
                 )
                 
                 conn.commit()
                 conn.close()
-                logger.info(f"セッション情報を保存しました: {user_did}")
+                logger.info(f"ログイン情報を保存しました: {username}")
                 return True
             except sqlite3.Error as sqle:
                 logger.error(f"データベース操作に失敗しました: {str(sqle)}", exc_info=True)
                 return False
                 
         except Exception as e:
-            logger.error(f"セッション情報の保存に失敗しました: {str(e)}", exc_info=True)
+            logger.error(f"ログイン情報の保存に失敗しました: {str(e)}", exc_info=True)
             return False
     
-    def load_session(self, user_did=None):
-        """セッション情報を読み込み"""
+    def load_credentials(self):
+        """ログイン情報を読み込み"""
         try:
             try:
                 conn = sqlite3.connect(self.db_path)
                 cursor = conn.cursor()
                 
-                if user_did:
-                    # 特定のユーザーのセッションを取得
-                    logger.debug(f"ユーザーID {user_did} のセッションを取得します")
-                    cursor.execute(
-                        "SELECT encrypted_session FROM sessions WHERE user_did = ?",
-                        (user_did,)
-                    )
-                else:
-                    # 最新のセッションを取得
-                    logger.debug("最新のセッションを取得します")
-                    cursor.execute(
-                        "SELECT encrypted_session FROM sessions ORDER BY created_at DESC LIMIT 1"
-                    )
+                # 最新のログイン情報を取得
+                logger.debug("ログイン情報を取得します")
+                cursor.execute(
+                    "SELECT username, encrypted_password FROM credentials ORDER BY created_at DESC LIMIT 1"
+                )
                 
                 result = cursor.fetchone()
                 conn.close()
                 
                 if result:
-                    logger.debug("セッションデータを取得しました")
+                    username, encrypted_password = result
+                    logger.debug(f"ログイン情報を取得しました: {username}")
                     
-                    # 暗号化されたセッションを復号化
-                    session = self.decrypt_data(result[0])
-                    if session:
-                        logger.debug("セッションの復号化が完了しました")
-                    return session
+                    # 暗号化されたパスワードを復号化
+                    password = self.decrypt_data(encrypted_password)
+                    if password:
+                        logger.debug("パスワードの復号化が完了しました")
+                        return username, password
+                    else:
+                        logger.error("パスワードの復号化に失敗しました")
+                        return None, None
                 else:
-                    logger.debug("セッションデータが見つかりませんでした")
+                    logger.debug("ログイン情報が見つかりませんでした")
+                    return None, None
                 
-                return None
             except sqlite3.Error as sqle:
                 logger.error(f"データベース操作に失敗しました: {str(sqle)}", exc_info=True)
-                return None
+                return None, None
                 
         except Exception as e:
-            logger.error(f"セッション情報の読み込みに失敗しました: {str(e)}", exc_info=True)
-            return None
+            logger.error(f"ログイン情報の読み込みに失敗しました: {str(e)}", exc_info=True)
+            return None, None
     
-    def delete_session(self, user_did=None):
-        """セッション情報を削除"""
+    def delete_credentials(self):
+        """ログイン情報を削除"""
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            if user_did:
-                # 特定のユーザーのセッションを削除
-                cursor.execute("DELETE FROM sessions WHERE user_did = ?", (user_did,))
-            else:
-                # すべてのセッションを削除
-                cursor.execute("DELETE FROM sessions")
+            # すべてのログイン情報を削除
+            cursor.execute("DELETE FROM credentials")
             
             conn.commit()
             conn.close()
-            logger.info(f"セッション情報を削除しました: {user_did if user_did else 'すべて'}")
+            logger.info("ログイン情報を削除しました")
             return True
         except Exception as e:
-            logger.error(f"セッション情報の削除に失敗しました: {str(e)}")
+            logger.error(f"ログイン情報の削除に失敗しました: {str(e)}")
             return False

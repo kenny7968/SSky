@@ -8,7 +8,11 @@ SSky - Blueskyクライアント
 
 import wx
 import wx.lib.mixins.listctrl as listmix
-from dummy_data import generate_dummy_posts
+import logging
+from datetime import datetime, timezone, timedelta
+
+# ロガーの設定
+logger = logging.getLogger(__name__)
 
 class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
     """タイムラインビュークラス（リストビュー実装）"""
@@ -30,9 +34,9 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         # 選択中の投稿インデックス
         self.selected_index = -1
         
-        # ダミーデータの生成
-        self.posts = generate_dummy_posts(20)
-        self.post_count = len(self.posts)
+        # 投稿データの初期化
+        self.posts = []
+        self.post_count = 0
         
         # UIの初期化
         self.init_ui()
@@ -58,8 +62,8 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             
         # 投稿データをリストに追加
         for i, post in enumerate(self.posts):
-            # ユーザー名とハンドル名を結合
-            user_text = f"{post['username']} {post['handle']}"
+            # ユーザー名のみを表示
+            user_text = post['username']
             
             # リストに追加
             index = self.InsertItem(i, user_text)
@@ -220,6 +224,85 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             frame = wx.GetTopLevelParent(self)
             if hasattr(frame, 'on_delete'):
                 frame.on_delete(event)
+    
+    def fetch_timeline(self, client=None):
+        """Bluesky APIを使用してタイムラインを取得"""
+        # クライアントが渡されなかった場合は親フレームから取得
+        if not client:
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'client'):
+                client = frame.client
+        
+        # クライアントがない場合は何もしない
+        if not client:
+            logger.warning("タイムラインの取得に失敗しました: クライアントが設定されていません")
+            return
+            
+        try:
+            # タイムラインの取得（最新50件）
+            logger.info("タイムラインを取得しています...")
+            timeline_data = client.get_timeline(limit=50)
+            
+            # 投稿データの変換と格納
+            self.posts = []
+            
+            for post in timeline_data.feed:
+                # 投稿データを適切な形式に変換
+                post_data = {
+                    'username': post.post.author.display_name or post.post.author.handle,
+                    'handle': f"@{post.post.author.handle}",
+                    'content': post.post.record.text,
+                    'time': self._format_time(post.post.indexed_at),  # 表示用の文字列
+                    'raw_timestamp': post.post.indexed_at,  # ソート用のオリジナルタイムスタンプ
+                    'likes': getattr(post.post, 'like_count', 0),
+                    'replies': getattr(post.post, 'reply_count', 0),
+                    'reposts': getattr(post.post, 'repost_count', 0)
+                }
+                self.posts.append(post_data)
+                
+            # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
+            self.posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
+            self.post_count = len(self.posts)
+            
+            # UIの更新
+            self.DeleteAllItems()
+            self.init_ui()
+            
+            logger.info(f"タイムラインを取得しました: {len(self.posts)}件")
+            
+        except Exception as e:
+            logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
+    
+    def _format_time(self, timestamp):
+        """タイムスタンプを表示用の時間文字列に変換"""
+        try:
+            # タイムスタンプがUTC時間の場合
+            if isinstance(timestamp, str):
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            else:
+                dt = timestamp
+            
+            # 現在時刻との差を計算
+            now = datetime.now(timezone.utc)
+            diff = now - dt
+            
+            # 表示形式を決定
+            if diff.days > 0:
+                if diff.days == 1:
+                    return "昨日"
+                else:
+                    return f"{diff.days}日前"
+            elif diff.seconds >= 3600:
+                hours = diff.seconds // 3600
+                return f"{hours}時間前"
+            elif diff.seconds >= 60:
+                minutes = diff.seconds // 60
+                return f"{minutes}分前"
+            else:
+                return "たった今"
+        except Exception as e:
+            logger.error(f"時間フォーマットに失敗しました: {str(e)}")
+            return "不明"
     
     def get_selected_post(self):
         """選択中の投稿データを取得"""
