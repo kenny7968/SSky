@@ -321,6 +321,24 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             if hasattr(frame, 'on_delete'):
                 frame.on_delete(event)
     
+    def show_not_logged_in_message(self):
+        """未ログイン状態のメッセージを表示"""
+        # リストをクリア
+        self.DeleteAllItems()
+        self.posts = []
+        self.post_count = 0
+        self.selected_index = -1
+        
+        # 「ログインしていません」というアイテムを追加
+        index = self.InsertItem(0, "")
+        self.SetItem(index, 1, "ログインしていません")
+        self.SetItem(index, 2, "")
+        
+        # ステータスバーの更新
+        frame = wx.GetTopLevelParent(self)
+        if hasattr(frame, 'statusbar'):
+            frame.statusbar.SetStatusText("ログインしていません")
+    
     def fetch_timeline(self, client=None, selected_uri=None):
         """Bluesky APIを使用してタイムラインを取得
         
@@ -339,9 +357,10 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             if hasattr(frame, 'client'):
                 client = frame.client
         
-        # クライアントがない場合は何もしない
-        if not client:
+        # クライアントがない場合は未ログイン状態のメッセージを表示
+        if not client or not client.is_logged_in:
             logger.warning("タイムラインの取得に失敗しました: クライアントが設定されていません")
+            self.show_not_logged_in_message()
             return
             
         try:

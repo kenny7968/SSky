@@ -119,6 +119,10 @@ class AuthHandlers:
                 if hasattr(self.parent, 'statusbar'):
                     self.parent.statusbar.SetStatusText("ログインに失敗しました")
                 
+                # 未ログイン状態のメッセージを表示
+                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                    self.parent.timeline.show_not_logged_in_message()
+                
                 return False
             
         except Exception as e:
@@ -133,6 +137,10 @@ class AuthHandlers:
             
             if hasattr(self.parent, 'statusbar'):
                 self.parent.statusbar.SetStatusText("ログインに失敗しました")
+            
+            # 未ログイン状態のメッセージを表示
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                self.parent.timeline.show_not_logged_in_message()
             
             return False
             
@@ -163,6 +171,10 @@ class AuthHandlers:
             
             if hasattr(self.parent, 'update_login_status'):
                 self.parent.update_login_status(False)
+                
+            # タイムラインビューを更新（「ログインしていません」表示）
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                self.parent.timeline.show_not_logged_in_message()
             
             logger.info("ログアウトしました")
             
@@ -188,7 +200,13 @@ class AuthHandlers:
                 return self.perform_login(username, password, show_dialog=False)
             else:
                 logger.debug("保存されたログイン情報がありません")
+                # 未ログイン状態のメッセージを表示
+                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                    self.parent.timeline.show_not_logged_in_message()
                 return False
         except Exception as e:
             logger.error(f"ログイン情報の読み込みに失敗しました: {str(e)}")
+            # 未ログイン状態のメッセージを表示
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                self.parent.timeline.show_not_logged_in_message()
             return False
