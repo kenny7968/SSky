@@ -165,6 +165,9 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             elif key_code == ord('P'):  # Ctrl+P
                 self.on_profile(event)
                 return
+            elif key_code == ord('E'):  # Ctrl+E
+                self.on_open_url(event)
+                return
         
         # Delキーで投稿削除
         if key_code == wx.WXK_DELETE:
@@ -218,6 +221,8 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         repost_item = menu.Append(wx.ID_ANY, "リポスト(&T)\tCtrl+Shift+R")
         quote_item = menu.Append(wx.ID_ANY, "引用(&Q)\tCtrl+Q")
         profile_item = menu.Append(wx.ID_ANY, "投稿者のプロフィールを表示(&P)\tCtrl+P")
+        open_url_item = menu.Append(wx.ID_ANY, "URLを開く(&E)\tCtrl+E")
+        menu.AppendSeparator()  # 区切り線
         delete_item = menu.Append(wx.ID_ANY, "投稿を削除(&D)\tDel")
         
         # 自分の投稿以外は削除メニューを無効化
@@ -230,6 +235,7 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         self.Bind(wx.EVT_MENU, self.on_quote, quote_item)
         self.Bind(wx.EVT_MENU, self.on_repost, repost_item)
         self.Bind(wx.EVT_MENU, self.on_profile, profile_item)
+        self.Bind(wx.EVT_MENU, self.on_open_url, open_url_item)
         self.Bind(wx.EVT_MENU, self.on_delete, delete_item)
         
         # 自分の投稿はリポストできない
@@ -424,6 +430,24 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             
         except Exception as e:
             logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
+    
+    def on_open_url(self, event):
+        """URLを開くアクション
+        
+        Args:
+            event: メニューイベント
+        """
+        if self.selected_index == -1:
+            return
+            
+        # 選択中の投稿を取得
+        post = self.posts[self.selected_index]
+        
+        # URLユーティリティをインポート
+        from utils.url_utils import handle_urls_in_text
+        
+        # 投稿内容からURLを検出して開く
+        handle_urls_in_text(post['content'], self)
     
     def get_selected_post(self):
         """選択中の投稿データを取得

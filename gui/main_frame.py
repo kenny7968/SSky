@@ -98,6 +98,7 @@ class MainFrame(wx.Frame):
         reply_item = post_menu.Append(wx.ID_ANY, "返信(&R)\tCtrl+R", "投稿に返信する")
         repost_item = post_menu.Append(wx.ID_ANY, "リポスト(&T)\tCtrl+Shift+R", "投稿をリポストする")
         quote_item = post_menu.Append(wx.ID_ANY, "引用(&Q)\tCtrl+Q", "投稿を引用する")
+        open_url_item = post_menu.Append(wx.ID_ANY, "URLを開く(&E)\tCtrl+E", "投稿内のURLを開く")
         delete_item = post_menu.Append(wx.ID_ANY, "投稿を削除(&D)\tDel", "投稿を削除する")
         post_menu.AppendSeparator()  # 区切り線
         profile_item = post_menu.Append(wx.ID_ANY, "投稿者のプロフィールを表示(&P)\tCtrl+P", "投稿者のプロフィールを表示")
@@ -123,6 +124,7 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.post_handlers.on_reply, reply_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_quote, quote_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_repost, repost_item)
+        self.Bind(wx.EVT_MENU, self.on_open_url, open_url_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_delete, delete_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_profile, profile_item)
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
@@ -217,3 +219,12 @@ class MainFrame(wx.Frame):
             event: メニューイベント
         """
         self.post_handlers.on_new_post(event)
+        
+    def on_open_url(self, event):
+        """URLを開くアクション（プロキシ）
+        
+        Args:
+            event: メニューイベント
+        """
+        if hasattr(self, 'timeline') and hasattr(self.timeline, 'on_open_url'):
+            self.timeline.on_open_url(event)

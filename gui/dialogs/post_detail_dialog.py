@@ -8,6 +8,7 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+from utils.url_utils import extract_urls, open_url
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -51,8 +52,62 @@ class PostDetailDialog(wx.Dialog):
         # Escキーが押されたらダイアログを閉じる
         if key_code == wx.WXK_ESCAPE:
             self.EndModal(wx.ID_CLOSE)
+        # Enterキーが押されたらカーソル位置のURLを開く
+        elif key_code == wx.WXK_RETURN:
+            self.open_url_at_cursor()
         else:
             event.Skip()
+            
+    def open_url_at_cursor(self):
+        """カーソル位置のURLを開く"""
+        # 現在のカーソル位置を取得
+        pos = self.content.GetInsertionPoint()
+        text = self.content.GetValue()
+        
+        # カーソル位置の前後のテキストを取得
+        before_text = text[:pos]
+        after_text = text[pos:]
+        
+        # URLを検出
+        urls_before = extract_urls(before_text)
+        urls_after = extract_urls(after_text)
+        
+        # カーソル位置に最も近いURLを特定
+        url_to_open = None
+        
+        if urls_before and urls_after:
+            # 前後両方にURLがある場合、より近い方を選択
+            if len(before_text) - before_text.rfind(urls_before[-1]) < after_text.find(urls_after[0]):
+                url_to_open = urls_before[-1]
+            else:
+                url_to_open = urls_after[0]
+        elif urls_before:
+            # 前にのみURLがある場合
+            url_to_open = urls_before[-1]
+        elif urls_after:
+            # 後ろにのみURLがある場合
+            url_to_open = urls_after[0]
+            
+        # URLが見つかった場合は開く
+        if url_to_open:
+            open_url(url_to_open)
+            
+    def on_url_click(self, event):
+        """URLクリック時の処理
+        
+        Args:
+            event: URLイベント
+        """
+        # クリックされたURLの範囲を取得
+        start = event.GetURLStart()
+        end = event.GetURLEnd()
+        
+        # URLテキストを取得
+        url = self.content.GetRange(start, end)
+        
+        # URLを開く
+        if url:
+            open_url(url)
         
     def init_ui(self):
         """UIの初期化"""
@@ -64,17 +119,20 @@ class PostDetailDialog(wx.Dialog):
         content_text += f"{self.post_data['content']}\n\n"
         content_text += f"いいね: {self.post_data['likes']}  返信: {self.post_data['replies']}  リポスト: {self.post_data['reposts']}"
         
-        content = wx.TextCtrl(
+        self.content = wx.TextCtrl(
             panel, 
             value=content_text,
             style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_AUTO_URL | wx.BORDER_SIMPLE
         )
         # フォントとサイズの設定
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        content.SetFont(font)
+        self.content.SetFont(font)
         # 背景色の設定（システムの背景色に合わせる）
-        content.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
-        main_sizer.Add(content, 1, wx.ALL | wx.EXPAND, 10)
+        self.content.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        main_sizer.Add(self.content, 1, wx.ALL | wx.EXPAND, 10)
+        
+        # URLクリックイベントのバインド
+        self.content.Bind(wx.EVT_TEXT_URL, self.on_url_click)
         
         # 区切り線
         line = wx.StaticLine(panel, style=wx.LI_HORIZONTAL)
