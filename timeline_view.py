@@ -82,7 +82,7 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         """アイテム選択時の処理"""
         self.selected_index = event.GetIndex()
         
-        # 選択された投稿が自分の投稿かどうかに基づいて、メニューの有効/無効を設定
+        # 選択された投稿の情報を取得
         post = self.posts[self.selected_index]
         is_own_post = post.get('is_own_post', False)
         
@@ -93,8 +93,7 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         # ポストメニューを取得（インデックス1がポストメニュー）
         post_menu = menubar.GetMenu(1)
         
-        # 「投稿を削除」メニュー項目を取得（インデックス3が「投稿を削除」）
-        # メニュー項目の順序: 0=新規投稿, 1=区切り線, 2=いいね, 3=返信, 4=引用, 5=削除, 6=区切り線, 7=プロフィール表示
+        # 「投稿を削除」メニュー項目を取得（インデックス5が削除）
         delete_item = post_menu.FindItemByPosition(5)
         
         # 自分の投稿かどうかに基づいて有効/無効を設定
@@ -210,8 +209,10 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
     def on_like(self, event):
         """いいねアクション"""
         if self.selected_index != -1:
-            post = self.posts[self.selected_index]
-            wx.MessageBox(f"投稿にいいねしました", "いいね", wx.OK | wx.ICON_INFORMATION)
+            # 親フレームのon_likeメソッドを呼び出す
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'on_like'):
+                frame.on_like(event)
         
     def on_reply(self, event):
         """返信アクション"""
@@ -249,8 +250,13 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             if hasattr(frame, 'on_delete'):
                 frame.on_delete(event)
     
-    def fetch_timeline(self, client=None):
+    def fetch_timeline(self, client=None, selected_uri=None):
         """Bluesky APIを使用してタイムラインを取得"""
+        # 現在選択されている投稿のURIを記憶（引数で指定されていない場合）
+        if selected_uri is None and self.selected_index != -1 and self.selected_index < len(self.posts):
+            selected_uri = self.posts[self.selected_index].get('uri')
+            logger.info(f"現在選択されている投稿のURI: {selected_uri}")
+        
         # クライアントが渡されなかった場合は親フレームから取得
         if not client:
             frame = wx.GetTopLevelParent(self)
@@ -271,6 +277,9 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             self.posts = []
             
             for post in timeline_data.feed:
+                # いいね情報のデバッグ出力
+                logger.info(f"投稿 {post.post.uri} の情報を取得")
+                
                 # 投稿データを適切な形式に変換
                 post_data = {
                     'username': post.post.author.display_name or post.post.author.handle,
@@ -295,6 +304,18 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             # UIの更新
             self.DeleteAllItems()
             self.init_ui()
+            
+            # 以前選択していた投稿と同じURIを持つ投稿を選択
+            if selected_uri:
+                for i, post in enumerate(self.posts):
+                    if post.get('uri') == selected_uri:
+                        logger.info(f"以前選択していた投稿を再選択: index={i}, uri={selected_uri}")
+                        self.Select(i)
+                        self.Focus(i)
+                        self.selected_index = i
+                        # 選択した項目が表示されるようにスクロール
+                        self.EnsureVisible(i)
+                        break
             
             logger.info(f"タイムラインを取得しました: {len(self.posts)}件")
             
@@ -427,7 +448,10 @@ class PostDetailDialog(wx.Dialog):
         
     def on_like(self, event):
         """いいねボタンクリック時の処理"""
-        wx.MessageBox(f"投稿にいいねしました", "いいね", wx.OK | wx.ICON_INFORMATION)
+        # 親フレームのon_likeメソッドを呼び出す
+        frame = wx.GetTopLevelParent(self.GetParent())
+        if hasattr(frame, 'on_like'):
+            frame.on_like(event)
         
     def on_reply(self, event):
         """返信ボタンクリック時の処理"""

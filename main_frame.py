@@ -411,13 +411,48 @@ class MainFrame(wx.Frame):
             
         dlg.Destroy()
     
+    # いいね処理中フラグ（二重いいね防止用）
+    _liking_post = False
+    
     def on_like(self, event):
         """いいねアクション"""
+        # いいね処理中なら何もしない（二重いいね防止）
+        if self._liking_post:
+            return
+            
         selected = self.timeline.get_selected_post()
-        if selected:
-            wx.MessageBox(f"投稿にいいねしました", "いいね", wx.OK | wx.ICON_INFORMATION)
-        else:
+        if not selected:
             wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        try:
+            # いいね処理中フラグをセット
+            self._liking_post = True
+            
+            # いいねを付ける
+            self.statusbar.SetStatusText("いいねしています...")
+            like_response = self.client.like(selected['uri'], selected['cid'])
+            
+            # レスポンスをログに出力（デバッグ用）
+            logger.info(f"いいねレスポンス: {like_response}")
+            
+            # いいね成功
+            wx.MessageBox("投稿にいいねしました", "いいね", wx.OK | wx.ICON_INFORMATION)
+            self.statusbar.SetStatusText("いいねしました")
+            
+            # 現在選択されている投稿のURIを取得
+            selected_uri = selected.get('uri')
+            
+            # タイムラインを更新（選択されていた投稿のURIを渡す）
+            self.timeline.fetch_timeline(self.client, selected_uri)
+            
+        except Exception as e:
+            logger.error(f"いいね処理に失敗しました: {str(e)}")
+            wx.MessageBox(f"いいね処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            self.statusbar.SetStatusText("いいね処理に失敗しました")
+        finally:
+            # いいね処理中フラグをリセット
+            self._liking_post = False
     
     def on_reply(self, event):
         """返信アクション"""
