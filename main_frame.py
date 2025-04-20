@@ -521,15 +521,58 @@ class MainFrame(wx.Frame):
             # 通常のキー処理を継続
             event.Skip()
     
+    # 削除処理中フラグ（二重削除防止用）
+    _deleting_post = False
+    
     def on_delete(self, event):
         """投稿削除アクション"""
+        # 削除処理中なら何もしない（二重削除防止）
+        if self._deleting_post:
+            return
+            
         selected = self.timeline.get_selected_post()
-        if selected:
-            dlg = wx.MessageDialog(self, "この投稿を削除してもよろしいですか？", "投稿削除の確認", 
-                                  wx.YES_NO | wx.ICON_QUESTION)
-            if dlg.ShowModal() == wx.ID_YES:
+        if not selected:
+            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        # 自分の投稿かどうかを確認
+        if not selected.get('is_own_post', False):
+            wx.MessageBox("自分の投稿のみ削除できます", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        # 削除に必要な情報があるか確認
+        if not selected.get('uri') or not selected.get('cid'):
+            wx.MessageBox("投稿の削除に必要な情報がありません", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        # 削除確認ダイアログ
+        dlg = wx.MessageDialog(self, "この投稿を削除してもよろしいですか？", "投稿削除の確認", 
+                              wx.YES_NO | wx.ICON_QUESTION)
+        
+        if dlg.ShowModal() == wx.ID_YES:
+            try:
+                # 削除処理中フラグをセット
+                self._deleting_post = True
+                
+                # 投稿を削除
+                self.statusbar.SetStatusText("投稿を削除しています...")
+                # エラーメッセージから、repoパラメータが必要であることがわかる
+                # URIを渡してみる（URIには通常、投稿者のDIDと投稿のIDが含まれている）
+                self.client.delete_post(selected['uri'])
+                
+                # 削除成功
                 wx.MessageBox("投稿を削除しました", "削除完了", wx.OK | wx.ICON_INFORMATION)
                 self.statusbar.SetStatusText("投稿が削除されました")
-            dlg.Destroy()
-        else:
-            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
+                
+                # タイムラインを更新
+                self.timeline.fetch_timeline(self.client)
+                
+            except Exception as e:
+                logger.error(f"投稿の削除に失敗しました: {str(e)}")
+                wx.MessageBox(f"投稿の削除に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                self.statusbar.SetStatusText("投稿の削除に失敗しました")
+            finally:
+                # 削除処理中フラグをリセット
+                self._deleting_post = False
+                
+        dlg.Destroy()

@@ -81,6 +81,26 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
     def on_item_selected(self, event):
         """アイテム選択時の処理"""
         self.selected_index = event.GetIndex()
+        
+        # 選択された投稿が自分の投稿かどうかに基づいて、メニューの有効/無効を設定
+        post = self.posts[self.selected_index]
+        is_own_post = post.get('is_own_post', False)
+        
+        # 親フレームのメニューバーを取得
+        frame = wx.GetTopLevelParent(self)
+        menubar = frame.GetMenuBar()
+        
+        # ポストメニューを取得（インデックス1がポストメニュー）
+        post_menu = menubar.GetMenu(1)
+        
+        # 「投稿を削除」メニュー項目を取得（インデックス3が「投稿を削除」）
+        # メニュー項目の順序: 0=新規投稿, 1=区切り線, 2=いいね, 3=返信, 4=引用, 5=削除, 6=区切り線, 7=プロフィール表示
+        delete_item = post_menu.FindItemByPosition(5)
+        
+        # 自分の投稿かどうかに基づいて有効/無効を設定
+        if delete_item:
+            delete_item.Enable(is_own_post)
+        
         event.Skip()
         
     def on_item_activated(self, event):
@@ -172,6 +192,10 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         profile_item = menu.Append(wx.ID_ANY, "投稿者のプロフィールを表示(&P)\tCtrl+P")
         delete_item = menu.Append(wx.ID_ANY, "投稿を削除(&D)\tDel")
         
+        # 自分の投稿以外は削除メニューを無効化
+        if not post.get('is_own_post', False):
+            delete_item.Enable(False)
+        
         # イベントバインド
         self.Bind(wx.EVT_MENU, self.on_like, like_item)
         self.Bind(wx.EVT_MENU, self.on_reply, reply_item)
@@ -251,12 +275,16 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
                 post_data = {
                     'username': post.post.author.display_name or post.post.author.handle,
                     'handle': f"@{post.post.author.handle}",
+                    'author_handle': post.post.author.handle,  # 投稿者のハンドル（@なし）
                     'content': post.post.record.text,
                     'time': self._format_time(post.post.indexed_at),  # 表示用の文字列
                     'raw_timestamp': post.post.indexed_at,  # ソート用のオリジナルタイムスタンプ
                     'likes': getattr(post.post, 'like_count', 0),
                     'replies': getattr(post.post, 'reply_count', 0),
-                    'reposts': getattr(post.post, 'repost_count', 0)
+                    'reposts': getattr(post.post, 'repost_count', 0),
+                    'uri': getattr(post.post, 'uri', None),  # 投稿のURI（削除に必要）
+                    'cid': getattr(post.post, 'cid', None),  # 投稿のCID（削除に必要）
+                    'is_own_post': post.post.author.handle == client.me.handle  # 自分の投稿かどうか
                 }
                 self.posts.append(post_data)
                 
