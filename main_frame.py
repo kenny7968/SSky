@@ -7,7 +7,16 @@ SSky - Blueskyクライアント
 """
 
 import wx
+import wx.lib.dialogs
+import logging
 from timeline_view import TimelineView
+from atproto import Client
+from atproto.exceptions import AtProtocolError
+from auth_utils import AuthUtils
+
+# ロガーの設定
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class MainFrame(wx.Frame):
     """SSkyメインウィンドウクラス"""
@@ -21,14 +30,23 @@ class MainFrame(wx.Frame):
             style=wx.DEFAULT_FRAME_STYLE
         )
         
+        # Blueskyクライアント
+        self.client = None
+        
         # ユーザー名（ログイン後に設定）
         self.username = None
+        
+        # 認証ユーティリティ
+        self.auth_utils = AuthUtils()
         
         # UIの初期化
         self.init_ui()
         
         # 中央に配置
         self.Centre()
+        
+        # 保存されたセッションを読み込み
+        self.load_saved_session()
         
     def init_ui(self):
         """UIの初期化"""
@@ -57,7 +75,10 @@ class MainFrame(wx.Frame):
         
         # アプリメニュー
         app_menu = wx.Menu()
-        login_item = app_menu.Append(wx.ID_ANY, "Blueskyにログイン(&A)", "Blueskyにログイン")
+        self.login_item = app_menu.Append(wx.ID_ANY, "Blueskyにログイン(&A)", "Blueskyにログイン")
+        self.logout_item = app_menu.Append(wx.ID_ANY, "ログアウト(&L)", "Blueskyからログアウト")
+        self.logout_item.Enable(False)  # 初期状態では無効
+        app_menu.AppendSeparator()  # 区切り線
         exit_item = app_menu.Append(wx.ID_EXIT, "終了(&X)", "アプリケーションを終了")
         
         # ポストメニュー
@@ -84,7 +105,8 @@ class MainFrame(wx.Frame):
         self.SetMenuBar(menubar)
         
         # イベントバインド
-        self.Bind(wx.EVT_MENU, self.on_login, login_item)
+        self.Bind(wx.EVT_MENU, self.on_login, self.login_item)
+        self.Bind(wx.EVT_MENU, self.on_logout, self.logout_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
         self.Bind(wx.EVT_MENU, self.on_new_post, new_post_item)
         self.Bind(wx.EVT_MENU, self.on_like, like_item)
@@ -99,15 +121,158 @@ class MainFrame(wx.Frame):
         self.username = username
         self.SetTitle(f"SSky - [{username}]")
     
+    def load_saved_session(self):
+        """保存されたセッション情報を読み込み"""
+        try:
+            # セッション情報を読み込み
+            session = self.auth_utils.load_session()
+            if session:
+                # セッションを復元
+                self.client = Client()
+                self.client._session = session
+                
+                # ユーザー情報を取得
+                try:
+                    # セッションが有効かどうかを確認
+                    profile = self.client.app.bsky.actor.getProfile({'actor': session.did})
+                    
+                    # セッションが有効な場合
+                    self.set_username(profile.display_name)
+                    self.statusbar.SetStatusText(f"{profile.display_name}としてログインしました")
+                    self.update_login_status(True)
+                    logger.info(f"保存されたセッションを復元しました: {profile.display_name}")
+                    
+                    # TODO: タイムラインの更新など
+                    
+                except Exception as e:
+                    # セッションが無効な場合
+                    logger.warning(f"保存されたセッションが無効です: {str(e)}")
+                    self.auth_utils.delete_session()
+                    self.client = None
+        except Exception as e:
+            logger.error(f"セッション情報の読み込みに失敗しました: {str(e)}")
+    
+    def update_login_status(self, is_logged_in):
+        """ログイン状態に応じてUIを更新"""
+        self.login_item.Enable(not is_logged_in)
+        self.logout_item.Enable(is_logged_in)
+    
     def on_login(self, event):
         """ログインダイアログを表示"""
-        dlg = wx.TextEntryDialog(self, "Blueskyのユーザー名を入力してください:", "ログイン")
+        # カスタムダイアログの作成
+        dlg = wx.Dialog(self, title="Blueskyにログイン", size=(400, 200))
+        
+        # レイアウト
+        panel = wx.Panel(dlg)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # ユーザー名入力
+        username_label = wx.StaticText(panel, label="ユーザー名（例: username.bsky.social）:")
+        sizer.Add(username_label, 0, wx.ALL | wx.EXPAND, 5)
+        username_ctrl = wx.TextCtrl(panel)
+        sizer.Add(username_ctrl, 0, wx.ALL | wx.EXPAND, 5)
+        
+        # パスワード入力
+        password_label = wx.StaticText(panel, label="パスワード:")
+        sizer.Add(password_label, 0, wx.ALL | wx.EXPAND, 5)
+        password_ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
+        sizer.Add(password_ctrl, 0, wx.ALL | wx.EXPAND, 5)
+        
+        # ボタン
+        button_sizer = wx.StdDialogButtonSizer()
+        ok_button = wx.Button(panel, wx.ID_OK, "ログイン")
+        cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
+        button_sizer.AddButton(ok_button)
+        button_sizer.AddButton(cancel_button)
+        button_sizer.Realize()
+        sizer.Add(button_sizer, 0, wx.ALL | wx.CENTER, 10)
+        
+        panel.SetSizer(sizer)
+        
+        # ダイアログ表示
         if dlg.ShowModal() == wx.ID_OK:
-            username = dlg.GetValue()
-            if username:
-                self.set_username(username)
-                self.statusbar.SetStatusText(f"{username}としてログインしました")
+            username = username_ctrl.GetValue()
+            password = password_ctrl.GetValue()
+            
+            if username and password:
+                self.perform_login(username, password)
+            else:
+                wx.MessageBox("ユーザー名とパスワードを入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+        
         dlg.Destroy()
+    
+    def perform_login(self, username, password, auth_factor_token=None):
+        """ログイン処理を実行"""
+        try:
+            # Blueskyにログイン
+            self.statusbar.SetStatusText("Blueskyにログイン中...")
+            self.client = Client()
+            
+            logger.debug(f"ログイン試行: ユーザー名={username}")
+            
+            try:
+                # ログイン試行
+                profile = self.client.login(username, password)
+                
+                logger.debug(f"ログイン成功: プロフィール={profile.display_name}, セッション={type(self.client._session)}")
+                
+                # ログイン成功
+                self.set_username(profile.display_name)
+                self.statusbar.SetStatusText(f"{profile.display_name}としてログインしました")
+                self.update_login_status(True)
+                
+                # 成功通知ダイアログを表示
+                wx.MessageBox(f"{profile.display_name}としてログインしました", "ログイン成功", wx.OK | wx.ICON_INFORMATION)
+                
+                # セッション情報を保存
+                if self.client._session:
+                    logger.debug(f"セッション情報: DID={self.client._session.did}, 型={type(self.client._session)}")
+                    saved = self.auth_utils.save_session(self.client._session.did, self.client._session)
+                    if saved:
+                        logger.info(f"セッション情報を保存しました: {profile.display_name}")
+                    else:
+                        logger.warning("セッション情報の保存に失敗しました")
+                else:
+                    logger.warning("セッションオブジェクトがありません")
+                
+                # TODO: タイムラインの更新など
+                
+            except Exception as e:
+                # ログイン失敗
+                error_message = f"ログインに失敗しました: {str(e)}\n\n2段階認証を設定しているアカウントは、アプリパスワードを使用してください。"
+                logger.error(f"ログインに失敗しました: {str(e)}")
+                wx.MessageBox(error_message, "ログイン失敗", wx.OK | wx.ICON_ERROR)
+                self.statusbar.SetStatusText("ログインに失敗しました")
+            
+        except Exception as e:
+            # ログイン失敗
+            logger.error(f"ログイン処理中に例外が発生しました: {str(e)}", exc_info=True)
+            wx.MessageBox(f"ログインに失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            self.statusbar.SetStatusText("ログインに失敗しました")
+    
+    
+    def on_logout(self, event):
+        """ログアウト処理"""
+        if self.client and self.username:
+            username = self.username
+            
+            # セッション情報を削除
+            if self.client._session:
+                self.auth_utils.delete_session(self.client._session.did)
+            
+            # クライアントをリセット
+            self.client = None
+            self.username = None
+            
+            # UIを更新
+            self.SetTitle("SSky")
+            self.statusbar.SetStatusText("ログアウトしました")
+            self.update_login_status(False)
+            
+            logger.info("ログアウトしました")
+            
+            # ログアウト通知ダイアログを表示
+            wx.MessageBox(f"{username}からログアウトしました", "ログアウト完了", wx.OK | wx.ICON_INFORMATION)
     
     def on_exit(self, event):
         """アプリケーションを終了"""
