@@ -9,7 +9,8 @@ SSky - Blueskyクライアント
 import wx
 import wx.lib.mixins.listctrl as listmix
 import logging
-from datetime import datetime, timezone, timedelta
+from utils.time_format import format_relative_time
+from gui.dialogs.post_detail_dialog import PostDetailDialog
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -18,7 +19,11 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
     """タイムラインビュークラス（リストビュー実装）"""
     
     def __init__(self, parent):
-        """初期化"""
+        """初期化
+        
+        Args:
+            parent: 親ウィンドウ
+        """
         wx.ListCtrl.__init__(
             self, 
             parent, 
@@ -79,7 +84,11 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             self.Focus(0)
             
     def on_item_selected(self, event):
-        """アイテム選択時の処理"""
+        """アイテム選択時の処理
+        
+        Args:
+            event: リストイベント
+        """
         self.selected_index = event.GetIndex()
         
         # 選択された投稿の情報を取得
@@ -103,7 +112,11 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         event.Skip()
         
     def on_item_activated(self, event):
-        """アイテムアクティベート時の処理（ダブルクリックなど）"""
+        """アイテムアクティベート時の処理（ダブルクリックなど）
+        
+        Args:
+            event: リストイベント
+        """
         index = event.GetIndex()
         post = self.posts[index]
         
@@ -115,7 +128,11 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         event.Skip()
         
     def on_key_down(self, event):
-        """キー入力時の処理"""
+        """キー入力時の処理
+        
+        Args:
+            event: キーイベント
+        """
         key_code = event.GetKeyCode()
         ctrl_down = event.ControlDown()
         shift_down = event.ShiftDown()
@@ -137,7 +154,10 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
                 self.on_like(event)
                 return
             elif key_code == ord('R'):  # Ctrl+R
-                self.on_reply(event)
+                if shift_down:  # Ctrl+Shift+R
+                    self.on_repost(event)
+                else:  # Ctrl+R
+                    self.on_reply(event)
                 return
             elif key_code == ord('Q'):  # Ctrl+Q
                 self.on_quote(event)
@@ -162,7 +182,11 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         event.Skip()
         
     def on_context_menu(self, event):
-        """コンテキストメニュー表示時の処理（右クリック）"""
+        """コンテキストメニュー表示時の処理（右クリック）
+        
+        Args:
+            event: マウスイベント
+        """
         # 選択されている項目がない場合は何もしない
         if self.selected_index == -1:
             return
@@ -177,7 +201,11 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         self.show_context_menu(pos)
         
     def show_context_menu(self, pos):
-        """コンテキストメニューを表示"""
+        """コンテキストメニューを表示
+        
+        Args:
+            pos: 表示位置
+        """
         # 選択されている投稿
         post = self.posts[self.selected_index]
         
@@ -187,6 +215,7 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         # メニュー項目の追加（ショートカットキーとアクセラレータキー表示付き）
         like_item = menu.Append(wx.ID_ANY, "いいね(&L)\tCtrl+L")
         reply_item = menu.Append(wx.ID_ANY, "返信(&R)\tCtrl+R")
+        repost_item = menu.Append(wx.ID_ANY, "リポスト(&T)\tCtrl+Shift+R")
         quote_item = menu.Append(wx.ID_ANY, "引用(&Q)\tCtrl+Q")
         profile_item = menu.Append(wx.ID_ANY, "投稿者のプロフィールを表示(&P)\tCtrl+P")
         delete_item = menu.Append(wx.ID_ANY, "投稿を削除(&D)\tDel")
@@ -199,15 +228,24 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         self.Bind(wx.EVT_MENU, self.on_like, like_item)
         self.Bind(wx.EVT_MENU, self.on_reply, reply_item)
         self.Bind(wx.EVT_MENU, self.on_quote, quote_item)
+        self.Bind(wx.EVT_MENU, self.on_repost, repost_item)
         self.Bind(wx.EVT_MENU, self.on_profile, profile_item)
         self.Bind(wx.EVT_MENU, self.on_delete, delete_item)
+        
+        # 自分の投稿はリポストできない
+        if post.get('is_own_post', False):
+            repost_item.Enable(False)
         
         # メニュー表示
         self.PopupMenu(menu, pos)
         menu.Destroy()
         
     def on_like(self, event):
-        """いいねアクション"""
+        """いいねアクション
+        
+        Args:
+            event: メニューイベント
+        """
         if self.selected_index != -1:
             # 親フレームのon_likeメソッドを呼び出す
             frame = wx.GetTopLevelParent(self)
@@ -215,35 +253,62 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
                 frame.on_like(event)
         
     def on_reply(self, event):
-        """返信アクション"""
+        """返信アクション
+        
+        Args:
+            event: メニューイベント
+        """
         if self.selected_index != -1:
-            post = self.posts[self.selected_index]
-            dlg = wx.TextEntryDialog(self, "返信内容を入力:", "返信")
-            if dlg.ShowModal() == wx.ID_OK:
-                reply = dlg.GetValue()
-                if reply:
-                    wx.MessageBox(f"返信を投稿しました: {reply}", "返信", wx.OK | wx.ICON_INFORMATION)
-            dlg.Destroy()
+            # 親フレームのon_replyメソッドを呼び出す
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'on_reply'):
+                frame.on_reply(event)
         
     def on_quote(self, event):
-        """引用アクション"""
+        """引用アクション
+        
+        Args:
+            event: メニューイベント
+        """
         if self.selected_index != -1:
-            post = self.posts[self.selected_index]
-            dlg = wx.TextEntryDialog(self, "引用内容を入力:", "引用")
-            if dlg.ShowModal() == wx.ID_OK:
-                quote = dlg.GetValue()
-                if quote:
-                    wx.MessageBox(f"引用を投稿しました: {quote}", "引用", wx.OK | wx.ICON_INFORMATION)
-            dlg.Destroy()
+            # 親フレームのon_quoteメソッドを呼び出す
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'on_quote'):
+                frame.on_quote(event)
+                
+    def on_repost(self, event):
+        """リポストアクション
+        
+        Args:
+            event: メニューイベント
+        """
+        if self.selected_index != -1:
+            # 親フレームのon_repostメソッドを呼び出す
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'on_repost'):
+                frame.on_repost(event)
         
     def on_profile(self, event):
-        """プロフィール表示アクション"""
+        """プロフィール表示アクション
+        
+        Args:
+            event: メニューイベント
+        """
         if self.selected_index != -1:
-            post = self.posts[self.selected_index]
-            wx.MessageBox(f"プロフィールを表示します: {post['username']}", "プロフィール", wx.OK | wx.ICON_INFORMATION)
+            # 親フレームのon_profileメソッドを呼び出す
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'on_profile'):
+                frame.on_profile(event)
+            else:
+                post = self.posts[self.selected_index]
+                wx.MessageBox(f"プロフィールを表示します: {post['username']}", "プロフィール", wx.OK | wx.ICON_INFORMATION)
     
     def on_delete(self, event):
-        """削除アクション"""
+        """削除アクション
+        
+        Args:
+            event: メニューイベント
+        """
         if self.selected_index != -1:
             # 親フレームのon_deleteメソッドを呼び出す
             frame = wx.GetTopLevelParent(self)
@@ -251,7 +316,12 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
                 frame.on_delete(event)
     
     def fetch_timeline(self, client=None, selected_uri=None):
-        """Bluesky APIを使用してタイムラインを取得"""
+        """Bluesky APIを使用してタイムラインを取得
+        
+        Args:
+            client (BlueskyClient, optional): Blueskyクライアント
+            selected_uri (str, optional): 選択する投稿のURI
+        """
         # 現在選択されている投稿のURIを記憶（引数で指定されていない場合）
         if selected_uri is None and self.selected_index != -1 and self.selected_index < len(self.posts):
             selected_uri = self.posts[self.selected_index].get('uri')
@@ -277,8 +347,7 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             self.posts = []
             
             for post in timeline_data.feed:
-                # いいね情報のデバッグ出力
-                logger.info(f"投稿 {post.post.uri} の情報を取得")
+                # 投稿情報のログ出力は削除
                 
                 # 投稿データを適切な形式に変換
                 post_data = {
@@ -286,15 +355,49 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
                     'handle': f"@{post.post.author.handle}",
                     'author_handle': post.post.author.handle,  # 投稿者のハンドル（@なし）
                     'content': post.post.record.text,
-                    'time': self._format_time(post.post.indexed_at),  # 表示用の文字列
+                    'time': format_relative_time(post.post.indexed_at),  # 表示用の文字列
                     'raw_timestamp': post.post.indexed_at,  # ソート用のオリジナルタイムスタンプ
                     'likes': getattr(post.post, 'like_count', 0),
                     'replies': getattr(post.post, 'reply_count', 0),
                     'reposts': getattr(post.post, 'repost_count', 0),
                     'uri': getattr(post.post, 'uri', None),  # 投稿のURI（削除に必要）
                     'cid': getattr(post.post, 'cid', None),  # 投稿のCID（削除に必要）
-                    'is_own_post': post.post.author.handle == client.me.handle  # 自分の投稿かどうか
+                    'is_own_post': post.post.author.handle == client.profile.handle,  # 自分の投稿かどうか
+                    # スレッド情報を追加
+                    'reply_parent': None,
+                    'reply_root': None
                 }
+                
+                # スレッド情報を取得（返信の場合）
+                if hasattr(post.post.record, 'reply') and post.post.record.reply:
+                    logger.debug(f"返信投稿を検出: {post.post.uri}")
+                    
+                    # 親投稿の情報
+                    if hasattr(post.post.record.reply, 'parent'):
+                        parent_uri = getattr(post.post.record.reply.parent, 'uri', None)
+                        parent_cid = getattr(post.post.record.reply.parent, 'cid', None)
+                        
+                        if parent_uri and parent_cid:
+                            post_data['reply_parent'] = {
+                                'uri': parent_uri,
+                                'cid': parent_cid
+                            }
+                            logger.debug(f"親投稿情報: {parent_uri}")
+                    
+                    # ルート投稿の情報
+                    if hasattr(post.post.record.reply, 'root'):
+                        root_uri = getattr(post.post.record.reply.root, 'uri', None)
+                        root_cid = getattr(post.post.record.reply.root, 'cid', None)
+                        
+                        if root_uri and root_cid:
+                            post_data['reply_root'] = {
+                                'uri': root_uri,
+                                'cid': root_cid
+                            }
+                            logger.debug(f"ルート投稿情報: {root_uri}")
+                    
+                    # デバッグ出力
+                    logger.debug(f"スレッド情報: parent={post_data.get('reply_parent') is not None}, root={post_data.get('reply_root') is not None}")
                 self.posts.append(post_data)
                 
             # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
@@ -322,155 +425,12 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         except Exception as e:
             logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
     
-    def _format_time(self, timestamp):
-        """タイムスタンプを表示用の時間文字列に変換"""
-        try:
-            # タイムスタンプがUTC時間の場合
-            if isinstance(timestamp, str):
-                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-            else:
-                dt = timestamp
-            
-            # 現在時刻との差を計算
-            now = datetime.now(timezone.utc)
-            diff = now - dt
-            
-            # 表示形式を決定
-            if diff.days > 0:
-                if diff.days == 1:
-                    return "昨日"
-                else:
-                    return f"{diff.days}日前"
-            elif diff.seconds >= 3600:
-                hours = diff.seconds // 3600
-                return f"{hours}時間前"
-            elif diff.seconds >= 60:
-                minutes = diff.seconds // 60
-                return f"{minutes}分前"
-            else:
-                return "たった今"
-        except Exception as e:
-            logger.error(f"時間フォーマットに失敗しました: {str(e)}")
-            return "不明"
-    
     def get_selected_post(self):
-        """選択中の投稿データを取得"""
+        """選択中の投稿データを取得
+        
+        Returns:
+            dict: 選択中の投稿データ。選択されていない場合はNone
+        """
         if 0 <= self.selected_index < len(self.posts):
             return self.posts[self.selected_index]
         return None
-
-
-class PostDetailDialog(wx.Dialog):
-    """投稿詳細ダイアログ"""
-    
-    def __init__(self, parent, post_data):
-        """初期化"""
-        super(PostDetailDialog, self).__init__(
-            parent, 
-            title=f"{post_data['username']}の投稿",
-            size=(500, 300),
-            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
-        )
-        
-        self.post_data = post_data
-        
-        # UIの初期化
-        self.init_ui()
-        
-        # キーイベントのバインド
-        self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
-        
-        # 中央に配置
-        self.Centre()
-        
-    def on_key_down(self, event):
-        """キー入力時の処理"""
-        key_code = event.GetKeyCode()
-        
-        # Escキーが押されたらダイアログを閉じる
-        if key_code == wx.WXK_ESCAPE:
-            self.EndModal(wx.ID_CLOSE)
-        else:
-            event.Skip()
-        
-    def init_ui(self):
-        """UIの初期化"""
-        panel = wx.Panel(self)
-        main_sizer = wx.BoxSizer(wx.VERTICAL)
-        
-        # 投稿内容（リードオンリーエディット）- 全ての情報を含む
-        content_text = f"{self.post_data['username']} {self.post_data['handle']} - {self.post_data['time']}\n\n"
-        content_text += f"{self.post_data['content']}\n\n"
-        content_text += f"いいね: {self.post_data['likes']}  返信: {self.post_data['replies']}  リポスト: {self.post_data['reposts']}"
-        
-        content = wx.TextCtrl(
-            panel, 
-            value=content_text,
-            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_AUTO_URL | wx.BORDER_SIMPLE
-        )
-        # フォントとサイズの設定
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        content.SetFont(font)
-        # 背景色の設定（システムの背景色に合わせる）
-        content.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
-        main_sizer.Add(content, 1, wx.ALL | wx.EXPAND, 10)
-        
-        # 区切り線
-        line = wx.StaticLine(panel, style=wx.LI_HORIZONTAL)
-        main_sizer.Add(line, 0, wx.EXPAND | wx.ALL, 5)
-        
-        # アクションボタン
-        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        
-        # いいねボタン
-        like_btn = wx.Button(panel, label="いいね", size=(80, -1))
-        like_btn.Bind(wx.EVT_BUTTON, self.on_like)
-        button_sizer.Add(like_btn, 0, wx.ALL, 5)
-        
-        # 返信ボタン
-        reply_btn = wx.Button(panel, label="返信", size=(80, -1))
-        reply_btn.Bind(wx.EVT_BUTTON, self.on_reply)
-        button_sizer.Add(reply_btn, 0, wx.ALL, 5)
-        
-        # 引用ボタン
-        quote_btn = wx.Button(panel, label="引用", size=(80, -1))
-        quote_btn.Bind(wx.EVT_BUTTON, self.on_quote)
-        button_sizer.Add(quote_btn, 0, wx.ALL, 5)
-        
-        # 閉じるボタン
-        close_btn = wx.Button(panel, wx.ID_CLOSE, "閉じる")
-        close_btn.Bind(wx.EVT_BUTTON, self.on_close)
-        button_sizer.Add(close_btn, 0, wx.ALL, 5)
-        
-        main_sizer.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 10)
-        
-        panel.SetSizer(main_sizer)
-        
-    def on_like(self, event):
-        """いいねボタンクリック時の処理"""
-        # 親フレームのon_likeメソッドを呼び出す
-        frame = wx.GetTopLevelParent(self.GetParent())
-        if hasattr(frame, 'on_like'):
-            frame.on_like(event)
-        
-    def on_reply(self, event):
-        """返信ボタンクリック時の処理"""
-        dlg = wx.TextEntryDialog(self, "返信内容を入力:", "返信")
-        if dlg.ShowModal() == wx.ID_OK:
-            reply = dlg.GetValue()
-            if reply:
-                wx.MessageBox(f"返信を投稿しました: {reply}", "返信", wx.OK | wx.ICON_INFORMATION)
-        dlg.Destroy()
-        
-    def on_quote(self, event):
-        """引用ボタンクリック時の処理"""
-        dlg = wx.TextEntryDialog(self, "引用内容を入力:", "引用")
-        if dlg.ShowModal() == wx.ID_OK:
-            quote = dlg.GetValue()
-            if quote:
-                wx.MessageBox(f"引用を投稿しました: {quote}", "引用", wx.OK | wx.ICON_INFORMATION)
-        dlg.Destroy()
-        
-    def on_close(self, event):
-        """閉じるボタンクリック時の処理"""
-        self.EndModal(wx.ID_CLOSE)

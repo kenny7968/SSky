@@ -1,0 +1,16 @@
+{
+    "app_name": "SSky",
+    "version": "1.0.0",
+    "theme": "light",
+    "font_size": 10,
+    "window_size": {
+        "width": 800,
+        "height": 600
+    },
+    "timeline": {
+        "refresh_interval": 60,
+        "post_count": 50,
+        "auto_refresh": true
+    },
+    "debug_mode": false
+}
