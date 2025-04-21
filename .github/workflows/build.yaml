@@ -10,10 +10,8 @@ on:
     # To build on main/master branch, uncomment the following line:
     #branches: [ main , master ]
 
-  pull_request:
+  #pull_request:
     #branches: [ main, master ]
-
-  workflow_dispatch:
 
 jobs:
   build-release:
@@ -52,14 +50,13 @@ jobs:
       - name: Build PyInstaller bootloader
         shell: bash # waf スクリプトは bash 環境で実行するのが確実
         run: |
-          cd ./bootloader
+          cd bootloader
           echo "Bootloader building path: $(pwd)"
           python ./waf distclean all
-        working-directory: ./bootloader # 'pyinstaller' ディレクトリ内で実行
+        working-directory: ./pyinstaller # 'pyinstaller' ディレクトリ内で実行
 
       - name: Install custom PyInstaller
         run: |
-          cd ..
           pip install . # ビルドしたPyInstallerをインストール
         working-directory: ./pyinstaller
       # --- PyInstallerのカスタムビルド完了 ---
