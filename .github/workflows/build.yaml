@@ -52,7 +52,7 @@ jobs:
       - name: Build PyInstaller bootloader
         shell: bash # waf スクリプトは bash 環境で実行するのが確実
         run: |
-          cd bootloader
+          cd ./bootloader
           echo "Bootloader building path: $(pwd)"
           python ./waf distclean all
         working-directory: ./bootloader # 'pyinstaller' ディレクトリ内で実行
