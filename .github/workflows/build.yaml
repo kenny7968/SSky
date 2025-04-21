@@ -96,12 +96,10 @@ jobs:
           Get-FileHash -Path ${{ env.ZIP_FILENAME }} -Algorithm SHA256 | ForEach-Object { Add-Content -Path changelog.md -Value "$($_.Hash) ${{ env.ZIP_FILENAME }}" }
 
       # --- GitHub Release を作成して成果物をアップロード ---
-      - name: Create GitHub Release
+      - name: Release
         uses: softprops/action-gh-release@v2 # Release作成・アップロード用アクション
         with:
           files: ${{ env.ZIP_FILENAME }} # 作成したZIPファイルを指定
-          tag_name: ${{ github.ref }} # トリガーとなったタグ名を指定
-          name: Release ${{ github.ref_name }} # リリースタイトル (例: Release v1.0.0)
           body_path: changelog.md
           fail_on_unmatched_files: true
           draft: false # falseにすると即時公開 (trueにすると下書き)
