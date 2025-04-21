@@ -65,10 +65,7 @@ jobs:
       # --- アプリケーションのビルド ---
       - name: Build application with PyInstaller
         run: |
-          pyinstaller --noconfirm --log-level=INFO \
-            --noconsole \
-            --name SSky \
-            SSky.py
+          pyinstaller --noconfirm --log-level=INFO --noconsole --name SSky --clean SSky.py
 
       # --- リリース用パッケージの準備 ---
       - name: Prepare release package
