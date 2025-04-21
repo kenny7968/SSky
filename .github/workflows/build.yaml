@@ -71,8 +71,8 @@ jobs:
       - name: Prepare release package
         run: |
           mkdir release_package # パッケージ用の一時ディレクトリを作成
-          xcopy /E /I manual .\release_package\manual\ # manualディレクトリをコピー
-          copy dist\SSky.exe .\release_package\ # ビルドされたexeファイルをコピー (★★★ 上記 --name で指定した名前に合わせる ★★★)
+          xcopy /E /I manual .\release_package\manual\
+          xcopy /E /I dist\SSky .\release_package\
 
       # --- ZIPファイルを作成 ---
       - name: Create ZIP archive
