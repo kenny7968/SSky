@@ -4,7 +4,9 @@ name: Create Release Build
 
 on:
   push:
-    tags: ["*"]
+    tags: 
+      - 'v*.*.*' # 'v' + セマンティックバージョニング形式のタグ (例: v1.0.0) に反応
+      - 'dev*'  # 開発バージョン
     # To build on main/master branch, uncomment the following line:
     branches: [ main , master ]
 
