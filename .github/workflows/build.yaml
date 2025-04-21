@@ -8,10 +8,10 @@ on:
       - 'v*.*.*' # 'v' + セマンティックバージョニング形式のタグ (例: v1.0.0) に反応
       - 'dev*'  # 開発バージョン
     # To build on main/master branch, uncomment the following line:
-    branches: [ main , master ]
+    #branches: [ main , master ]
 
   pull_request:
-    branches: [ main, master ]
+    #branches: [ main, master ]
 
   workflow_dispatch:
 
