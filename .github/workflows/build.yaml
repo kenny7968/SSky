@@ -16,14 +16,14 @@ on:
 jobs:
   build-release:
     name: Build and Release Windows App
-    runs-on: windows-latest # Windows環境で実行
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4 # リポジトリのコードをチェックアウト
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5 # Python環境をセットアップ
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -70,18 +70,28 @@ jobs:
       # --- リリース用パッケージの準備 ---
       - name: Prepare release package
         run: |
-          mkdir release_package # パッケージ用の一時ディレクトリを作成
+          # パッケージ用の一時ディレクトリを作成
+          mkdir release_package
+          # manualフォルダをコピー
           xcopy /E /I manual .\release_package\manual\
-          xcopy /E /I dist\SSky .\release_package\
+          # dist\SSkyディレクトリの中身を直接release_packageにコピー
+          xcopy /E /I dist\SSky\* .\release_package\
 
       # --- ZIPファイルを作成 ---
       - name: Create ZIP archive
         run: |
           $TAG_NAME = "${{ github.ref_name }}"
-          $VERSION = $TAG_NAME
-          $ZIP_FILENAME = "SSky-$VERSION.zip"
+          $ZIP_FILENAME = "SSky-$TAG_NAME.zip"
           Compress-Archive -Path .\release_package\* -DestinationPath $ZIP_FILENAME
-          echo "ZIP_FILENAME=$ZIP_FILENAME" >> $env:GITHUB_ENV # 後続のステップでファイル名を使用可能にする
+          # 環境変数に設定（PowerShell構文）
+          echo "ZIP_FILENAME=$ZIP_FILENAME" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # --- SHA256ハッシュの計算 ---
+      - name: Calculate SHA256 hash
+        run: |
+          # changelog.mdにハッシュ情報を追加
+          Add-Content -Path changelog.md -Value "`nSHA256: "
+          Get-FileHash -Path ${{ env.ZIP_FILENAME }} -Algorithm SHA256 | ForEach-Object { Add-Content -Path changelog.md -Value "$($_.Hash) ${{ env.ZIP_FILENAME }}" }
 
       # --- GitHub Release を作成して成果物をアップロード ---
       - name: Create GitHub Release
