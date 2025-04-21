@@ -1,0 +1,108 @@
+# .github/workflows/ リリースzipを作成する
+
+name: Create Release Build
+
+on:
+  push:
+    tags: 
+      - 'v*.*.*' # 'v' + セマンティックバージョニング形式のタグ (例: v1.0.0) に反応
+      - 'dev*'  # 開発バージョン
+    # To build on main/master branch, uncomment the following line:
+    #branches: [ main , master ]
+
+  pull_request:
+    #branches: [ main, master ]
+
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    name: Build and Release Windows App
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # リポジトリのコードをチェックアウト
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }} # requirements.txt があればキャッシュキーに含める
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # --- アプリケーションの依存関係をインストール ---
+      - name: Install application dependencies
+        run: pip install -r requirements.txt
+
+      # --- wheelのインストール
+      # Pyinstallerのビルドにwheelがいるので、先にpipしておく
+      - name: Install wheel
+        run: pip install wheel
+
+      # --- PyInstallerをソースからビルド ---
+      - name: Clone PyInstaller repository
+        run: git clone https://github.com/pyinstaller/pyinstaller.git # PyInstallerのソースをクローン
+
+      - name: Build PyInstaller bootloader
+        shell: bash # waf スクリプトは bash 環境で実行するのが確実
+        run: |
+          cd bootloader
+          echo "Bootloader building path: $(pwd)"
+          python ./waf distclean all # bootloaderをクリーンアップしてビルド
+        working-directory: ./pyinstaller # 'pyinstaller' ディレクトリ内で実行
+
+      - name: Install custom PyInstaller
+        run: |
+          pip install . # ビルドしたPyInstallerをインストール
+        working-directory: ./pyinstaller # 'pyinstaller' ディレクトリ内で実行
+      # --- PyInstallerのカスタムビルド完了 ---
+
+      # --- アプリケーションのビルド ---
+      - name: Build application with PyInstaller
+        run: |
+          pyinstaller --noconfirm --log-level=INFO --noconsole --name SSky --clean SSky.py
+
+      # --- リリース用パッケージの準備 ---
+      - name: Prepare release package
+        run: |
+          # パッケージ用の一時ディレクトリを作成
+          mkdir release_package
+          # manualフォルダをコピー
+          xcopy /E /I manual .\release_package\manual\
+          # dist\SSkyディレクトリの中身を直接release_packageにコピー
+          xcopy /E /I dist\SSky\* .\release_package\
+
+      # --- ZIPファイルを作成 ---
+      - name: Create ZIP archive
+        run: |
+          $TAG_NAME = "${{ github.ref_name }}"
+          $ZIP_FILENAME = "SSky-$TAG_NAME.zip"
+          Compress-Archive -Path .\release_package\* -DestinationPath $ZIP_FILENAME
+          # 環境変数に設定（PowerShell構文）
+          echo "ZIP_FILENAME=$ZIP_FILENAME" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # --- SHA256ハッシュの計算 ---
+      - name: Calculate SHA256 hash
+        run: |
+          # changelog.mdにハッシュ情報を追加
+          Add-Content -Path changelog.md -Value "`nSHA256: "
+          Get-FileHash -Path ${{ env.ZIP_FILENAME }} -Algorithm SHA256 | ForEach-Object { Add-Content -Path changelog.md -Value "$($_.Hash) ${{ env.ZIP_FILENAME }}" }
+
+      # --- GitHub Release を作成して成果物をアップロード ---
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2 # Release作成・アップロード用アクション
+        with:
+          files: ${{ env.ZIP_FILENAME }} # 作成したZIPファイルを指定
+          tag_name: ${{ github.ref }} # トリガーとなったタグ名を指定
+          name: Release ${{ github.ref_name }} # リリースタイトル (例: Release v1.0.0)
+          body_path: changelog.md
+          fail_on_unmatched_files: true
+          draft: false # falseにすると即時公開 (trueにすると下書き)
+          prerelease: ${{ contains(github.ref, 'dev') }}  # タグにdevが含まれていたらプレリリース
