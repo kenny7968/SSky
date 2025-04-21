@@ -38,6 +38,9 @@ jobs:
       - name: Install application dependencies
         run: pip install -r requirements.txt
 
+      - name: Uninstall existing PyInstaller (if any)
+        run: pip uninstall -y pyinstaller
+
       # --- wheelのインストール
       # Pyinstallerのビルドにwheelがいるので、先にpipしておく
       - name: Install wheel
@@ -64,7 +67,7 @@ jobs:
       # --- アプリケーションのビルド ---
       - name: Build application with PyInstaller
         run: |
-          pyinstaller --name SSky --noconsole --onedir --clean --noconfirm --log-level=INFO SSky.py
+          pyinstaller --name SSky --noconsole --onedir --noupx --clean --noconfirm --log-level=INFO SSky.py
 
       # --- リリース用パッケージの準備 ---
       - name: Prepare release package
