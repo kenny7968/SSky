@@ -25,21 +25,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4 # リポジトリのコードをチェックアウト
 
-      - name: Set up Python 3.11
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.13,2'
 
       # --- upgrade pip
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
+      - name: Uninstall existing PyInstaller (if any)
+        run: pip uninstall -y pyinstaller
+
       # --- アプリケーションの依存関係をインストール ---
       - name: Install application dependencies
         run: pip install -r requirements.txt
-
-      - name: Uninstall existing PyInstaller (if any)
-        run: pip uninstall -y pyinstaller
 
       # --- wheelのインストール
       # Pyinstallerのビルドにwheelがいるので、先にpipしておく
@@ -51,41 +51,32 @@ jobs:
         run: git clone https://github.com/pyinstaller/pyinstaller.git # PyInstallerのソースをクローン
 
       - name: Build PyInstaller bootloader
-        shell: bash # waf スクリプトは bash 環境で実行するのが確実
         run: |
           cd bootloader
-          echo "Bootloader building path: $(pwd)"
-          python ./waf distclean all
-        working-directory: ./pyinstaller # 'pyinstaller' ディレクトリ内で実行
+          python .\waf distclean all
+        working-directory: .\pyinstaller # 'pyinstaller' ディレクトリ内で実行
 
       - name: Install custom PyInstaller
         run: |
           pip install . # ビルドしたPyInstallerをインストール
-        working-directory: ./pyinstaller
+        working-directory: .\pyinstaller
       # --- PyInstallerのカスタムビルド完了 ---
 
-      # --- アプリケーションのビルド ---
-      - name: Build application with PyInstaller
-        run: |
-          pyinstaller --name SSky --noconsole --onedir --noupx --clean --noconfirm --log-level=INFO SSky.py
+      # --- SCons のインストール ---
+      - name: Install SCons
+        run: pip install scons
 
-      # --- リリース用パッケージの準備 ---
-      - name: Prepare release package
+      # --- アプリケーションのビルド（SCons使用） ---
+      - name: Build application with SCons
         run: |
-          # パッケージ用の一時ディレクトリを作成
-          mkdir release_package
-          # manualフォルダをコピー
-          xcopy /E /I manual .\release_package\manual\
-          # dist\SSkyディレクトリの中身を直接release_packageにコピー
-          xcopy /E /I dist\SSky\* .\release_package\
-
-      # --- ZIPファイルを作成 ---
-      - name: Create ZIP archive
-        run: |
+          # タグ名からバージョン番号を抽出（vプレフィックスを削除）
           $TAG_NAME = "${{ github.ref_name }}"
-          $ZIP_FILENAME = "SSky-$TAG_NAME.zip"
-          Compress-Archive -Path .\release_package\* -DestinationPath $ZIP_FILENAME
+          
+          # SCons を実行してビルド
+          scons --release=$VERSION
+          
           # 環境変数に設定（PowerShell構文）
+          $ZIP_FILENAME = "release\SSky-$VERSION.zip"
           echo "ZIP_FILENAME=$ZIP_FILENAME" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # --- SHA256ハッシュの計算 ---
