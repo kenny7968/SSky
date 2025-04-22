@@ -401,3 +401,105 @@ class BlueskyClient:
         except Exception as e:
             logger.error(f"リポスト中に例外が発生しました: {str(e)}", exc_info=True)
             raise
+            
+    def get_profile(self, handle):
+        """ユーザープロフィールを取得
+        
+        Args:
+            handle (str): ユーザーハンドル
+            
+        Returns:
+            object: プロフィール情報。取得失敗時は例外が発生
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("プロフィールの取得に失敗しました: ログインしていません")
+            raise Exception("プロフィールの取得にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザープロフィールを取得しています: {handle}")
+            
+            # プロフィールを取得
+            profile = self.client.get_profile(actor=handle)
+            
+            logger.info("プロフィールの取得が完了しました")
+            return profile
+            
+        except AtProtocolError as e:
+            logger.error(f"プロフィール取得時にBluesky APIエラー: {str(e)}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"プロフィール取得中に例外が発生しました: {str(e)}", exc_info=True)
+            raise
+            
+    def follow(self, handle):
+        """ユーザーをフォロー
+        
+        Args:
+            handle (str): フォローするユーザーのハンドル
+            
+        Returns:
+            object: フォロー結果。フォロー失敗時は例外が発生
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("フォローに失敗しました: ログインしていません")
+            raise Exception("フォローにはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザーをフォローしています: {handle}")
+            
+            # フォローを実行
+            result = self.client.follow(handle)
+            
+            logger.info("フォローが完了しました")
+            return result
+            
+        except AtProtocolError as e:
+            logger.error(f"フォロー時にBluesky APIエラー: {str(e)}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"フォロー中に例外が発生しました: {str(e)}", exc_info=True)
+            raise
+            
+    def unfollow(self, handle):
+        """ユーザーのフォローを解除
+        
+        Args:
+            handle (str): フォロー解除するユーザーのハンドル
+            
+        Returns:
+            object: フォロー解除結果。フォロー解除失敗時は例外が発生
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("フォロー解除に失敗しました: ログインしていません")
+            raise Exception("フォロー解除にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザーのフォローを解除しています: {handle}")
+            
+            # フォロー解除を実行
+            result = self.client.delete_follow(handle)
+            
+            logger.info("フォロー解除が完了しました")
+            return result
+            
+        except AtProtocolError as e:
+            logger.error(f"フォロー解除時にBluesky APIエラー: {str(e)}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"フォロー解除中に例外が発生しました: {str(e)}", exc_info=True)
+            raise

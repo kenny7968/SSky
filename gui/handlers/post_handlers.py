@@ -400,16 +400,55 @@ class PostHandlers:
         
         Args:
             event: メニューイベント
+            
+        Returns:
+            bool: 成功した場合はTrue
         """
+        if not self.client or not self.client.is_logged_in:
+            wx.MessageBox("プロフィールを表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            return False
+            
         # タイムラインから選択された投稿を取得
         selected = None
         if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'get_selected_post'):
             selected = self.parent.timeline.get_selected_post()
             
-        if selected:
-            wx.MessageBox(f"プロフィールを表示します: {selected['username']}", "プロフィール", wx.OK | wx.ICON_INFORMATION)
-        else:
+        if not selected:
             wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
+            return False
+            
+        try:
+            # ステータスバーの更新
+            if hasattr(self.parent, 'statusbar'):
+                self.parent.statusbar.SetStatusText(f"{selected['username']}のプロフィールを取得しています...")
+                
+            # 投稿者のハンドルを取得
+            author_handle = selected.get('author_handle')
+            if not author_handle:
+                wx.MessageBox("投稿者のハンドルが取得できません", "エラー", wx.OK | wx.ICON_ERROR)
+                return False
+                
+            # プロフィール情報を取得
+            profile = self.client.get_profile(author_handle)
+            
+            # ステータスバーの更新
+            if hasattr(self.parent, 'statusbar'):
+                self.parent.statusbar.SetStatusText(f"{selected['username']}のプロフィールを表示します")
+                
+            # プロフィールダイアログを表示
+            from gui.dialogs.profile_dialog import ProfileDialog
+            dlg = ProfileDialog(self.parent, profile)
+            dlg.ShowModal()
+            dlg.Destroy()
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"プロフィール表示に失敗しました: {str(e)}")
+            wx.MessageBox(f"プロフィール表示に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            if hasattr(self.parent, 'statusbar'):
+                self.parent.statusbar.SetStatusText("プロフィール表示に失敗しました")
+            return False
     
     def on_delete(self, event):
         """投稿削除アクション
