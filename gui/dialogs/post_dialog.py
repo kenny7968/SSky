@@ -38,6 +38,9 @@ class PostDialog(wx.Dialog):
         # UIの初期化
         self.init_ui()
         
+        # イベントバインド
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        
         # 中央に配置
         self.Centre()
         
@@ -74,6 +77,7 @@ class PostDialog(wx.Dialog):
         button_sizer = wx.StdDialogButtonSizer()
         post_button = wx.Button(panel, wx.ID_OK, "投稿")
         cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
+        cancel_button.Bind(wx.EVT_BUTTON, self.on_cancel)
         button_sizer.AddButton(post_button)
         button_sizer.AddButton(cancel_button)
         button_sizer.Realize()
@@ -99,6 +103,11 @@ class PostDialog(wx.Dialog):
                 self.EndModal(wx.ID_OK)
             else:
                 wx.MessageBox("投稿内容を入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+        # Escキーが押された場合
+        elif key_code == wx.WXK_ESCAPE:
+            # 投稿内容をチェック
+            self.check_content_and_close(wx.ID_CANCEL)
+            return  # イベントを処理済みとしてSkipしない
         else:
             # 通常のキー処理を継続
             event.Skip()
@@ -138,6 +147,53 @@ class PostDialog(wx.Dialog):
             
         dlg.Destroy()
         
+    def on_cancel(self, event):
+        """キャンセルボタンクリック時の処理
+        
+        Args:
+            event: ボタンイベント
+        """
+        # 投稿内容をチェック
+        self.check_content_and_close(wx.ID_CANCEL)
+        
+    def on_close(self, event):
+        """ダイアログが閉じられる時の処理
+        
+        Args:
+            event: クローズイベント
+        """
+        # 投稿内容をチェック
+        self.check_content_and_close(wx.ID_CANCEL)
+        
+    def check_content_and_close(self, result):
+        """投稿内容をチェックして、必要に応じて確認ダイアログを表示
+        
+        Args:
+            result: ダイアログの結果コード
+        """
+        # 投稿内容を取得
+        post_content = self.content_ctrl.GetValue()
+        
+        # 投稿内容が入力されている場合
+        if post_content.strip():
+            # 確認ダイアログを表示
+            dlg = wx.MessageDialog(
+                self,
+                "投稿内容が入力されています。本当に閉じますか？",
+                "確認",
+                wx.YES_NO | wx.ICON_QUESTION
+            )
+            
+            # ユーザーの選択を取得
+            if dlg.ShowModal() == wx.ID_YES:
+                # 「はい」が選択された場合、ダイアログを閉じる
+                self.EndModal(result)
+            
+            dlg.Destroy()
+        else:
+            # 投稿内容が入力されていない場合、そのまま閉じる
+            self.EndModal(result)
+    
     def get_post_data(self):
         """投稿データを取得
         
