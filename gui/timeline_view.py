@@ -390,7 +390,9 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
                     'is_own_post': post.post.author.handle == client.profile.handle,  # 自分の投稿かどうか
                     # スレッド情報を追加
                     'reply_parent': None,
-                    'reply_root': None
+                    'reply_root': None,
+                    # facets情報を追加（URLなどの特殊要素の情報）
+                    'facets': getattr(post.post.record, 'facets', None)
                 }
                 
                 # スレッド情報を取得（返信の場合）
@@ -465,8 +467,8 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         # URLユーティリティをインポート
         from utils.url_utils import handle_urls_in_text
         
-        # 投稿内容からURLを検出して開く
-        handle_urls_in_text(post['content'], self)
+        # 投稿内容からURLを検出して開く（facets情報も渡す）
+        handle_urls_in_text(post['content'], self, post.get('facets'))
     
     def get_selected_post(self):
         """選択中の投稿データを取得
