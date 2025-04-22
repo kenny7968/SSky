@@ -7,68 +7,68 @@ import zipfile
 from pathlib import Path
 from SCons.Script import Environment, Command, Alias, GetOption
 
-# コマンドライン引数からバージョン番号を取得
+# Get version number from command line arguments
 AddOption(
     '--release',
     dest='release',
     type='string',
     nargs=1,
     action='store',
-    help='バージョン番号を指定します（例：1.0.0）'
+    help='Specify version number (e.g.: 1.0.0)'
 )
 
 release = GetOption('release')
 if not release:
-    print("エラー: バージョン番号を指定してください（例：scons --release=1.0.0）")
-    sys.exit(1)
+    release = "dev"
+    print("No release version specified, using default: dev")
 
-# 環境設定
+# Environment setup
 env = Environment()
 
-# ディレクトリパス
+# Directory paths
 build_dir = 'build'
 dist_dir = 'dist'
 release_dir = 'release'
 package_dir = os.path.join(build_dir, f'SSky-{release}')
 zip_file = os.path.join(release_dir, f'SSky-{release}.zip')
 
-# ビルドディレクトリが存在しない場合は作成
+# Create build directory if it doesn't exist
 if not os.path.exists(build_dir):
     os.makedirs(build_dir)
 
-# リリースディレクトリが存在しない場合は作成
+# Create release directory if it doesn't exist
 if not os.path.exists(release_dir):
     os.makedirs(release_dir)
 
-# パッケージディレクトリが存在する場合は削除
+# Remove package directory if it exists
 if os.path.exists(package_dir):
     shutil.rmtree(package_dir)
 
-# パッケージディレクトリを作成
+# Create package directory
 os.makedirs(package_dir)
 
-# PyInstallerでビルドする関数
+# Function to build with PyInstaller
 def build_with_pyinstaller(target, source, env):
-    # PyInstallerコマンドを実行
+    # Execute PyInstaller command
     pyinstaller_cmd = 'pyinstaller --name SSky --noconsole --onedir --noupx --clean --noconfirm --log-level=INFO SSky.py'
-    print(f"実行中: {pyinstaller_cmd}")
+    print(f"Executing: {pyinstaller_cmd}")
     ret = os.system(pyinstaller_cmd)
     
     if ret != 0:
-        print("エラー: PyInstallerの実行に失敗しました")
+        print("Error: PyInstaller execution failed")
         return 1
     
-    # distディレクトリが存在するか確認
+    # Check if dist directory exists
     if not os.path.exists(dist_dir) or not os.path.exists(os.path.join(dist_dir, 'SSky')):
-        print("エラー: PyInstallerのビルド結果が見つかりません")
+        print("Error: PyInstaller build output not found")
         return 1
     
     return 0
 
-# ファイルをパッケージディレクトリにコピーする関数
+# Function to copy files to package directory
 def copy_files_to_package(target, source, env):
     try:
-        # SSkyフォルダの内容をコピー
+        # Copy contents of SSky folder
         ssky_dir = os.path.join(dist_dir, 'SSky')
         for item in os.listdir(ssky_dir):
             src_path = os.path.join(ssky_dir, item)
@@ -79,59 +79,59 @@ def copy_files_to_package(target, source, env):
             else:
                 shutil.copy2(src_path, dst_path)
         
-        # manualフォルダをコピー
+        # Copy manual folder
         manual_src = 'manual'
         manual_dst = os.path.join(package_dir, 'manual')
         shutil.copytree(manual_src, manual_dst)
         
-        # changelog.mdをコピー
+        # Copy changelog.md
         changelog_src = 'changelog.md'
         changelog_dst = os.path.join(package_dir, 'changelog.md')
         shutil.copy2(changelog_src, changelog_dst)
         
-        print(f"パッケージディレクトリの作成が完了しました: {package_dir}")
+        print(f"Package directory creation completed: {package_dir}")
         return 0
     except Exception as e:
-        print(f"エラー: ファイルのコピー中に問題が発生しました: {e}")
+        print(f"Error: Problem occurred while copying files: {e}")
         return 1
 
-# zipファイルを作成する関数
+# Function to create zip package
 def create_zip_package(target, source, env):
     try:
-        # zipファイルを作成
+        # Create zip file
         with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # パッケージディレクトリ内のすべてのファイルを追加
+            # Add all files in the package directory
             for root, dirs, files in os.walk(package_dir):
                 for file in files:
                     file_path = os.path.join(root, file)
-                    # zipファイル内のパスを相対パスに変換
+                    # Convert path in zip file to relative path
                     arcname = os.path.relpath(file_path, package_dir)
                     zipf.write(file_path, arcname)
         
-        print(f"zipパッケージの作成が完了しました: {zip_file}")
+        print(f"Zip package creation completed: {zip_file}")
         return 0
     except Exception as e:
-        print(f"エラー: zipファイルの作成中に問題が発生しました: {e}")
+        print(f"Error: Problem occurred while creating zip file: {e}")
         return 1
 
-# ビルドコマンドの定義
+# Build command definition
 build_cmd = env.Command('build_exe', None, build_with_pyinstaller)
 copy_cmd = env.Command('copy_files', build_cmd, copy_files_to_package)
 zip_cmd = env.Command('create_zip', copy_cmd, create_zip_package)
 
-# エイリアスの定義
+# Alias definition
 env.Alias('build', [build_cmd, copy_cmd, zip_cmd])
 env.Default('build')
 
-# 完了メッセージを表示する関数
+# Function to display completion message
 def show_completion_message(target, source, env):
-    print(f"\n===== ビルド完了 =====")
-    print(f"パッケージディレクトリ: {package_dir}")
-    print(f"zipファイル: {zip_file}")
-    print(f"バージョン: {release}")
+    print(f"\n===== Build Completed =====")
+    print(f"Package directory: {package_dir}")
+    print(f"Zip file: {zip_file}")
+    print(f"Version: {release}")
     print(f"====================\n")
     return 0
 
-# 完了メッセージを表示するコマンド
+# Command to display completion message
 completion_cmd = env.Command('completion', zip_cmd, show_completion_message)
 env.Alias('build', completion_cmd)
