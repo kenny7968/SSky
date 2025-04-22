@@ -8,7 +8,7 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
-from utils.url_utils import extract_urls, open_url
+from utils.url_utils import extract_urls, open_url, handle_urls_in_text, extract_urls_from_facets
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -60,6 +60,13 @@ class PostDetailDialog(wx.Dialog):
             
     def open_url_at_cursor(self):
         """カーソル位置のURLを開く"""
+        # facets情報がある場合は、それを優先的に使用
+        if 'facets' in self.post_data and self.post_data['facets']:
+            # 投稿内容全体に対してfacetsからURLを抽出して開く
+            handle_urls_in_text(self.post_data['content'], self, self.post_data['facets'])
+            return
+            
+        # facets情報がない場合は、従来の方法でURLを検出
         # 現在のカーソル位置を取得
         pos = self.content.GetInsertionPoint()
         text = self.content.GetValue()
@@ -98,6 +105,13 @@ class PostDetailDialog(wx.Dialog):
         Args:
             event: URLイベント
         """
+        # facets情報がある場合は、それを優先的に使用
+        if 'facets' in self.post_data and self.post_data['facets']:
+            # 投稿内容全体に対してfacetsからURLを抽出して開く
+            handle_urls_in_text(self.post_data['content'], self, self.post_data['facets'])
+            return
+            
+        # facets情報がない場合は、従来の方法でURLを検出
         # クリックされたURLの範囲を取得
         start = event.GetURLStart()
         end = event.GetURLEnd()
