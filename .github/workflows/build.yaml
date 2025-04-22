@@ -76,21 +76,27 @@ jobs:
           scons --release=$TAG_NAME
           
           # 環境変数に設定（PowerShell構文）
-          $ZIP_FILENAME = "release\SSky-$TAG_NAME.zip"
+          $ZIP_FILENAME = "SSky-$TAG_NAME.zip"
           echo "ZIP_FILENAME=$ZIP_FILENAME" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          # フルパスを指定
+          $FullPath_WIN = Join-Path -Path release -ChildPath $ZIP_FILENAME
+          $FullPath_LINUX = "release/$ZIP_NAME"
+          echo "ZIP_FULL_PATH_WIN=$FullPath_win" >> $env:GITHUB_ENV
+          echo "ZIP_PATH_LINUX=$FullPath_LINUX" >> $env:GITHUB_ENV
 
       # --- SHA256ハッシュの計算 ---
       - name: Calculate SHA256 hash
         run: |
           # changelog.mdにハッシュ情報を追加
           Add-Content -Path changelog.md -Value "`nSHA256: "
-          Get-FileHash -Path ${{ env.ZIP_FILENAME }} -Algorithm SHA256 | ForEach-Object { Add-Content -Path changelog.md -Value "$($_.Hash) ${{ env.ZIP_FILENAME }}" }
+          Get-FileHash -Path ${{ env.ZIP_FULL_PATH_WIN }} -Algorithm SHA256 | ForEach-Object { Add-Content -Path changelog.md -Value "$($_.Hash) ${{ env.ZIP_FILENAME }}" }
 
       # --- GitHub Release を作成して成果物をアップロード ---
       - name: Release
         uses: softprops/action-gh-release@v2 # Release作成・アップロード用アクション
         with:
-          files: ${{ env.ZIP_FILENAME }} # 作成したZIPファイルを指定
+          files: ${{ env.ZIP_PATH_LINUX }} # 作成したZIPファイルを指定
           body_path: changelog.md
           fail_on_unmatched_files: true
           draft: false # falseにすると即時公開 (trueにすると下書き)
