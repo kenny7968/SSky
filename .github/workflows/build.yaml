@@ -69,14 +69,14 @@ jobs:
       # --- アプリケーションのビルド（SCons使用） ---
       - name: Build application with SCons
         run: |
-          # タグ名からバージョン番号を抽出（vプレフィックスを削除）
+          # タグ名からバージョン番号を抽出
           $TAG_NAME = "${{ github.ref_name }}"
           
           # SCons を実行してビルド
-          scons --release=$VERSION
+          scons --release=$TAG_NAME
           
           # 環境変数に設定（PowerShell構文）
-          $ZIP_FILENAME = "release\SSky-$VERSION.zip"
+          $ZIP_FILENAME = "release\SSky-$TAG_NAME.zip"
           echo "ZIP_FILENAME=$ZIP_FILENAME" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # --- SHA256ハッシュの計算 ---
