@@ -81,7 +81,7 @@ jobs:
 
           # フルパスを指定
           $FullPath_WIN = Join-Path -Path release -ChildPath $ZIP_FILENAME
-          $FullPath_LINUX = "release/$ZIP_NAME"
+          $FullPath_LINUX = "release/$ZIP_FILENAME"
           echo "ZIP_FULL_PATH_WIN=$FullPath_win" >> $env:GITHUB_ENV
           echo "ZIP_PATH_LINUX=$FullPath_LINUX" >> $env:GITHUB_ENV
 
