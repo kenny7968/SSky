@@ -46,9 +46,12 @@ jobs:
         run: pip install scons
 
       # --- wheelのインストール
-      # Pyinstallerのビルドにwheelがいるので、先にpipしておく
       - name: Install wheel
         run: pip install wheel
+
+      # --- wxPythonのインストール
+      - name: Install wx
+        run: pip install wxPython
 
       # --- PyInstallerをソースからビルド ---
       - name: Clone PyInstaller repository
