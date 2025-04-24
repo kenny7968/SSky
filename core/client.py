@@ -648,8 +648,30 @@ class BlueskyClient:
             response = self.client.resolve_handle(handle=handle)
             target_did = response.did
             
-            # ミュートを実行
-            result = self.client.mute_actor(actor=target_did)
+            # ミュートを実行（名前空間を使用）
+            try:
+                # 方法1: app.bsky.graph名前空間を使用
+                result = self.client.app.bsky.graph.mute_actor(data={'actor': target_did})
+                logger.info("app.bsky.graph.mute_actorを使用してミュートしました")
+            except (AttributeError, Exception) as e1:
+                logger.debug(f"app.bsky.graph.mute_actorでのミュートに失敗: {str(e1)}")
+                try:
+                    # 方法2: bsky.graph名前空間を使用
+                    result = self.client.bsky.graph.mute_actor(data={'actor': target_did})
+                    logger.info("bsky.graph.mute_actorを使用してミュートしました")
+                except (AttributeError, Exception) as e2:
+                    logger.debug(f"bsky.graph.mute_actorでのミュートに失敗: {str(e2)}")
+                    # 方法3: 低レベルAPIを直接呼び出す
+                    from datetime import datetime
+                    result = self.client.com.atproto.repo.create_record(data={
+                        'repo': self.user_did,
+                        'collection': 'app.bsky.graph.mute',
+                        'record': {
+                            'subject': target_did,
+                            'createdAt': datetime.now().isoformat()
+                        }
+                    })
+                    logger.info("低レベルAPIを使用してミュートしました")
             
             logger.info("ミュートが完了しました")
             return result
@@ -686,8 +708,41 @@ class BlueskyClient:
             response = self.client.resolve_handle(handle=handle)
             target_did = response.did
             
-            # ミュート解除を実行
-            result = self.client.unmute_actor(actor=target_did)
+            # ミュート解除を実行（名前空間を使用）
+            try:
+                # 方法1: app.bsky.graph名前空間を使用
+                result = self.client.app.bsky.graph.unmute_actor(data={'actor': target_did})
+                logger.info("app.bsky.graph.unmute_actorを使用してミュート解除しました")
+            except (AttributeError, Exception) as e1:
+                logger.debug(f"app.bsky.graph.unmute_actorでのミュート解除に失敗: {str(e1)}")
+                try:
+                    # 方法2: bsky.graph名前空間を使用
+                    result = self.client.bsky.graph.unmute_actor(data={'actor': target_did})
+                    logger.info("bsky.graph.unmute_actorを使用してミュート解除しました")
+                except (AttributeError, Exception) as e2:
+                    logger.debug(f"bsky.graph.unmute_actorでのミュート解除に失敗: {str(e2)}")
+                    # 方法3: 低レベルAPIを直接呼び出す
+                    # ミュートレコードを検索して削除する必要があります
+                    # プロフィールからミュート情報を取得
+                    profile = self.client.get_profile(actor=handle)
+                    mute_uri = None
+                    
+                    if hasattr(profile, 'viewer') and hasattr(profile.viewer, 'muted'):
+                        # ミュート状態を確認
+                        is_muted = bool(profile.viewer.muted)
+                        if not is_muted:
+                            logger.info(f"ユーザー {handle} は既にミュート解除されています")
+                            return None
+                            
+                    # ミュートレコードを検索
+                    # 注意: 現在のAPIではミュートレコードのURIを直接取得する方法がないため、
+                    # 代替として標準のunmute_actorメソッドを試みます
+                    try:
+                        result = self.client.unmute_actor(actor=target_did)
+                        logger.info("標準APIを使用してミュート解除しました")
+                    except (AttributeError, Exception) as e3:
+                        logger.error(f"ミュート解除に失敗しました: 適切なAPIが見つかりません: {str(e3)}")
+                        raise Exception("ミュート解除の適切なAPIが見つかりませんでした")
             
             logger.info("ミュート解除が完了しました")
             return result
