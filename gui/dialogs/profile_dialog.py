@@ -98,6 +98,16 @@ class ProfileDialog(wx.Dialog):
         self.unfollow_btn.Bind(wx.EVT_BUTTON, self.on_unfollow)
         button_sizer.Add(self.unfollow_btn, 0, wx.ALL, 5)
         
+        # ブロックボタン
+        self.block_btn = wx.Button(panel, label="ブロック", size=(100, -1))
+        self.block_btn.Bind(wx.EVT_BUTTON, self.on_block)
+        button_sizer.Add(self.block_btn, 0, wx.ALL, 5)
+        
+        # ミュートボタン
+        self.mute_btn = wx.Button(panel, label="ミュート", size=(100, -1))
+        self.mute_btn.Bind(wx.EVT_BUTTON, self.on_mute)
+        button_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
+        
         # 閉じるボタン
         close_btn = wx.Button(panel, wx.ID_CLOSE, "閉じる")
         close_btn.Bind(wx.EVT_BUTTON, self.on_close)
@@ -144,16 +154,40 @@ class ProfileDialog(wx.Dialog):
         if self.client and self.client.profile and self.profile_data.handle == self.client.profile.handle:
             self.follow_btn.Enable(False)
             self.unfollow_btn.Enable(False)
+            self.block_btn.Enable(False)
+            self.mute_btn.Enable(False)
             return
             
-        # フォロー状態を確認（実際のAPIでは異なる可能性があります）
+        # フォロー状態を確認
         is_following = False
         if hasattr(self.profile_data, 'viewer') and hasattr(self.profile_data.viewer, 'following'):
             is_following = bool(self.profile_data.viewer.following)
         
+        # ブロック状態を確認
+        is_blocked = False
+        if hasattr(self.profile_data, 'viewer') and hasattr(self.profile_data.viewer, 'blocking'):
+            is_blocked = bool(self.profile_data.viewer.blocking)
+            
+        # ミュート状態を確認
+        is_muted = False
+        if hasattr(self.profile_data, 'viewer') and hasattr(self.profile_data.viewer, 'muted'):
+            is_muted = bool(self.profile_data.viewer.muted)
+        
         # ボタンの有効/無効を設定
-        self.follow_btn.Enable(not is_following)
-        self.unfollow_btn.Enable(is_following)
+        self.follow_btn.Enable(not is_following and not is_blocked)
+        self.unfollow_btn.Enable(is_following and not is_blocked)
+        
+        # ブロックボタンのラベルを設定
+        if is_blocked:
+            self.block_btn.SetLabel("ブロック解除")
+        else:
+            self.block_btn.SetLabel("ブロック")
+            
+        # ミュートボタンのラベルを設定
+        if is_muted:
+            self.mute_btn.SetLabel("ミュート解除")
+        else:
+            self.mute_btn.SetLabel("ミュート")
         
     def on_follow(self, event):
         """フォローボタンクリック時の処理
@@ -220,6 +254,176 @@ class ProfileDialog(wx.Dialog):
         
         dlg.Destroy()
         
+    def on_block(self, event):
+        """ブロックボタンクリック時の処理
+        
+        Args:
+            event: ボタンイベント
+        """
+        if not self.client or not self.client.is_logged_in:
+            wx.MessageBox("ブロック操作にはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        handle = self.profile_data.handle
+        display_name = self.profile_data.display_name or handle
+        
+        # ブロック状態を確認
+        is_blocked = False
+        if hasattr(self.profile_data, 'viewer') and hasattr(self.profile_data.viewer, 'blocking'):
+            is_blocked = bool(self.profile_data.viewer.blocking)
+            
+        if is_blocked:
+            # ブロック解除の確認ダイアログ
+            dlg = wx.MessageDialog(
+                self,
+                f"{display_name}のブロックを解除しますか？",
+                "ブロック解除の確認",
+                wx.YES_NO | wx.ICON_QUESTION
+            )
+            
+            if dlg.ShowModal() == wx.ID_YES:
+                try:
+                    # ブロック解除処理
+                    self.client.unblock(handle)
+                    
+                    # 成功メッセージ
+                    wx.MessageBox(f"{display_name}のブロックを解除しました", 
+                                 "ブロック解除完了", wx.OK | wx.ICON_INFORMATION)
+                    
+                    # ブロック状態を更新
+                    if hasattr(self.profile_data, 'viewer'):
+                        if not hasattr(self.profile_data.viewer, 'blocking'):
+                            setattr(self.profile_data.viewer, 'blocking', False)
+                        else:
+                            self.profile_data.viewer.blocking = False
+                    
+                    # ボタンの状態を更新
+                    self.update_follow_buttons()
+                    
+                except Exception as e:
+                    logger.error(f"ブロック解除処理に失敗しました: {str(e)}")
+                    wx.MessageBox(f"ブロック解除処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            
+            dlg.Destroy()
+        else:
+            # ブロックの確認ダイアログ
+            dlg = wx.MessageDialog(
+                self,
+                f"{display_name}をブロックしますか？\n\nブロックすると、相手のコンテンツが表示されなくなり、相手もあなたのコンテンツを見ることができなくなります。",
+                "ブロックの確認",
+                wx.YES_NO | wx.ICON_QUESTION
+            )
+            
+            if dlg.ShowModal() == wx.ID_YES:
+                try:
+                    # ブロック処理
+                    self.client.block(handle)
+                    
+                    # 成功メッセージ
+                    wx.MessageBox(f"{display_name}をブロックしました", 
+                                 "ブロック完了", wx.OK | wx.ICON_INFORMATION)
+                    
+                    # ブロック状態を更新
+                    if hasattr(self.profile_data, 'viewer'):
+                        if not hasattr(self.profile_data.viewer, 'blocking'):
+                            setattr(self.profile_data.viewer, 'blocking', True)
+                        else:
+                            self.profile_data.viewer.blocking = True
+                    
+                    # ボタンの状態を更新
+                    self.update_follow_buttons()
+                    
+                except Exception as e:
+                    logger.error(f"ブロック処理に失敗しました: {str(e)}")
+                    wx.MessageBox(f"ブロック処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            
+            dlg.Destroy()
+    
+    def on_mute(self, event):
+        """ミュートボタンクリック時の処理
+        
+        Args:
+            event: ボタンイベント
+        """
+        if not self.client or not self.client.is_logged_in:
+            wx.MessageBox("ミュート操作にはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        handle = self.profile_data.handle
+        display_name = self.profile_data.display_name or handle
+        
+        # ミュート状態を確認
+        is_muted = False
+        if hasattr(self.profile_data, 'viewer') and hasattr(self.profile_data.viewer, 'muted'):
+            is_muted = bool(self.profile_data.viewer.muted)
+            
+        if is_muted:
+            # ミュート解除の確認ダイアログ
+            dlg = wx.MessageDialog(
+                self,
+                f"{display_name}のミュートを解除しますか？",
+                "ミュート解除の確認",
+                wx.YES_NO | wx.ICON_QUESTION
+            )
+            
+            if dlg.ShowModal() == wx.ID_YES:
+                try:
+                    # ミュート解除処理
+                    self.client.unmute(handle)
+                    
+                    # 成功メッセージ
+                    wx.MessageBox(f"{display_name}のミュートを解除しました", 
+                                 "ミュート解除完了", wx.OK | wx.ICON_INFORMATION)
+                    
+                    # ミュート状態を更新
+                    if hasattr(self.profile_data, 'viewer'):
+                        if not hasattr(self.profile_data.viewer, 'muted'):
+                            setattr(self.profile_data.viewer, 'muted', False)
+                        else:
+                            self.profile_data.viewer.muted = False
+                    
+                    # ボタンの状態を更新
+                    self.update_follow_buttons()
+                    
+                except Exception as e:
+                    logger.error(f"ミュート解除処理に失敗しました: {str(e)}")
+                    wx.MessageBox(f"ミュート解除処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            
+            dlg.Destroy()
+        else:
+            # ミュートの確認ダイアログ
+            dlg = wx.MessageDialog(
+                self,
+                f"{display_name}をミュートしますか？\n\nミュートすると、相手のコンテンツがタイムラインに表示されなくなります。相手にはミュートされたことは通知されません。",
+                "ミュートの確認",
+                wx.YES_NO | wx.ICON_QUESTION
+            )
+            
+            if dlg.ShowModal() == wx.ID_YES:
+                try:
+                    # ミュート処理
+                    self.client.mute(handle)
+                    
+                    # 成功メッセージ
+                    wx.MessageBox(f"{display_name}をミュートしました", 
+                                 "ミュート完了", wx.OK | wx.ICON_INFORMATION)
+                    
+                    # ミュート状態を更新
+                    if hasattr(self.profile_data, 'viewer'):
+                        if not hasattr(self.profile_data.viewer, 'muted'):
+                            setattr(self.profile_data.viewer, 'muted', True)
+                        else:
+                            self.profile_data.viewer.muted = True
+                    
+                    # ボタンの状態を更新
+                    self.update_follow_buttons()
+                    
+                except Exception as e:
+                    logger.error(f"ミュート処理に失敗しました: {str(e)}")
+                    wx.MessageBox(f"ミュート処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            
+            dlg.Destroy()
+    
     def on_close(self, event):
         """閉じるボタンクリック時の処理
         

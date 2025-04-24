@@ -22,6 +22,11 @@ class BlueskyClient:
         self.client = AtprotoClient()
         self.profile = None
         self.is_logged_in = False
+        self.user_did = None  # ログインユーザーのDIDを保持
+        
+        # データストアの初期化
+        from core.data_store import DataStore
+        self.data_store = DataStore()
         
     def login(self, username, password):
         """Blueskyにログイン
@@ -44,6 +49,10 @@ class BlueskyClient:
             self.profile = self.client.login(username, password)
             
             logger.debug(f"ログイン成功: プロフィール={self.profile.display_name}, セッション={type(self.client._session)}")
+            
+            # ユーザーDIDを保存
+            self.user_did = self.client.me.did
+            logger.debug(f"ユーザーDID: {self.user_did}")
             
             # ログイン状態を更新
             self.is_logged_in = True
@@ -490,8 +499,43 @@ class BlueskyClient:
         try:
             logger.info(f"ユーザーのフォローを解除しています: {handle}")
             
-            # フォロー解除を実行
-            result = self.client.delete_follow(handle)
+            # プロフィールからフォロー情報を取得
+            profile = self.client.get_profile(actor=handle)
+            follow_uri = None
+            
+            if hasattr(profile, 'viewer') and hasattr(profile.viewer, 'following'):
+                follow_uri = profile.viewer.following
+                logger.debug(f"フォローレコードURI: {follow_uri}")
+            
+            if follow_uri:
+                # URIからレコードキーを抽出
+                # URI形式: at://did:plc:xxxxx/app.bsky.graph.follow/yyyyy
+                uri_parts = follow_uri.split('/')
+                rkey = uri_parts[-1]  # 最後の部分がrkey
+                
+                # 自分のDIDを使用
+                repo = self.user_did
+                
+                # フォローレコードのコレクション名
+                collection = 'app.bsky.graph.follow'
+                
+                # レコードを削除（dataオブジェクトとして渡す）
+                result = self.client.com.atproto.repo.delete_record(data={
+                    'repo': repo,
+                    'collection': collection,
+                    'rkey': rkey
+                })
+                logger.info("URIを使用してフォロー解除しました")
+            else:
+                # DIDを取得
+                response = self.client.resolve_handle(handle=handle)
+                target_did = response.did
+                logger.debug(f"対象ユーザーのDID: {target_did}")
+                
+                # フォローレコードが見つからない場合は標準のAPIを使用
+                logger.warning(f"フォローレコードが見つかりませんでした。標準APIを使用します: {handle}")
+                result = self.client.delete_follow(did=target_did)
+                logger.info("標準APIを使用してフォロー解除しました")
             
             logger.info("フォロー解除が完了しました")
             return result
@@ -502,4 +546,156 @@ class BlueskyClient:
             
         except Exception as e:
             logger.error(f"フォロー解除中に例外が発生しました: {str(e)}", exc_info=True)
+            raise
+            
+    def block(self, handle):
+        """ユーザーをブロック
+        
+        Args:
+            handle (str): ブロックするユーザーのハンドル
+            
+        Returns:
+            object: ブロック結果。ブロック失敗時は例外が発生
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("ブロックに失敗しました: ログインしていません")
+            raise Exception("ブロックにはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザーをブロックしています: {handle}")
+            
+            # DIDを取得
+            response = self.client.resolve_handle(handle=handle)
+            target_did = response.did
+            
+            # ブロックを実行
+            result = self.client.block_user(did=target_did)
+            
+            logger.info("ブロックが完了しました")
+            return result
+            
+        except AtProtocolError as e:
+            logger.error(f"ブロック時にBluesky APIエラー: {str(e)}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"ブロック中に例外が発生しました: {str(e)}", exc_info=True)
+            raise
+            
+    def unblock(self, handle):
+        """ユーザーのブロックを解除
+        
+        Args:
+            handle (str): ブロック解除するユーザーのハンドル
+            
+        Returns:
+            object: ブロック解除結果。ブロック解除失敗時は例外が発生
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("ブロック解除に失敗しました: ログインしていません")
+            raise Exception("ブロック解除にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザーのブロックを解除しています: {handle}")
+            
+            # DIDを取得
+            response = self.client.resolve_handle(handle=handle)
+            target_did = response.did
+            
+            # ブロック解除を実行
+            result = self.client.delete_block(did=target_did)
+            
+            logger.info("ブロック解除が完了しました")
+            return result
+            
+        except AtProtocolError as e:
+            logger.error(f"ブロック解除時にBluesky APIエラー: {str(e)}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"ブロック解除中に例外が発生しました: {str(e)}", exc_info=True)
+            raise
+            
+    def mute(self, handle):
+        """ユーザーをミュート
+        
+        Args:
+            handle (str): ミュートするユーザーのハンドル
+            
+        Returns:
+            object: ミュート結果。ミュート失敗時は例外が発生
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("ミュートに失敗しました: ログインしていません")
+            raise Exception("ミュートにはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザーをミュートしています: {handle}")
+            
+            # DIDを取得
+            response = self.client.resolve_handle(handle=handle)
+            target_did = response.did
+            
+            # ミュートを実行
+            result = self.client.mute_actor(actor=target_did)
+            
+            logger.info("ミュートが完了しました")
+            return result
+            
+        except AtProtocolError as e:
+            logger.error(f"ミュート時にBluesky APIエラー: {str(e)}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"ミュート中に例外が発生しました: {str(e)}", exc_info=True)
+            raise
+            
+    def unmute(self, handle):
+        """ユーザーのミュートを解除
+        
+        Args:
+            handle (str): ミュート解除するユーザーのハンドル
+            
+        Returns:
+            object: ミュート解除結果。ミュート解除失敗時は例外が発生
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("ミュート解除に失敗しました: ログインしていません")
+            raise Exception("ミュート解除にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザーのミュートを解除しています: {handle}")
+            
+            # DIDを取得
+            response = self.client.resolve_handle(handle=handle)
+            target_did = response.did
+            
+            # ミュート解除を実行
+            result = self.client.unmute_actor(actor=target_did)
+            
+            logger.info("ミュート解除が完了しました")
+            return result
+            
+        except AtProtocolError as e:
+            logger.error(f"ミュート解除時にBluesky APIエラー: {str(e)}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"ミュート解除中に例外が発生しました: {str(e)}", exc_info=True)
             raise
