@@ -44,6 +44,10 @@ class MainFrame(wx.Frame):
         # 認証マネージャー
         self.auth_manager = AuthManager()
         
+        # 設定マネージャー
+        from config.settings_manager import SettingsManager
+        self.settings_manager = SettingsManager()
+        
         # イベントハンドラ
         self.auth_handlers = AuthHandlers(self, self.client, self.auth_manager)
         self.post_handlers = PostHandlers(self, self.client)
@@ -56,6 +60,9 @@ class MainFrame(wx.Frame):
         
         # 保存されたセッションを読み込み
         self.auth_handlers.load_saved_session()
+        
+        # 設定に基づいて自動取得を設定
+        self.apply_timeline_settings()
         
     def init_ui(self):
         """UIの初期化"""
@@ -161,7 +168,37 @@ class MainFrame(wx.Frame):
         Args:
             event: メニューイベント
         """
-        wx.MessageBox("設定ダイアログ（未実装）", "設定", wx.OK | wx.ICON_INFORMATION)
+        from gui.dialogs.settings_dialog import SettingsDialog
+        from config.settings_manager import SettingsManager
+        
+        # 設定マネージャーの取得
+        if not hasattr(self, 'settings_manager'):
+            self.settings_manager = SettingsManager()
+        
+        # 設定ダイアログの表示
+        dialog = SettingsDialog(self, self.settings_manager)
+        result = dialog.ShowModal()
+        
+        if result == wx.ID_OK:
+            # 設定が変更された場合の処理
+            # タイムラインの自動更新設定を反映
+            logger = logging.getLogger(__name__)
+            logger.debug("設定ダイアログがOKで閉じられました。設定を反映します。")
+            
+            # タイムラインの自動更新設定を反映
+            if hasattr(self, 'timeline'):
+                auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)
+                fetch_interval = self.settings_manager.get('timeline.fetch_interval', 180)
+                logger.debug(f"タイムラインの自動更新設定: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}")
+                
+                # タイムラインの自動更新設定を反映するメソッドがあれば呼び出す
+                if hasattr(self.timeline, 'set_auto_fetch'):
+                    self.timeline.set_auto_fetch(auto_fetch, fetch_interval)
+        else:
+            logger = logging.getLogger(__name__)
+            logger.debug("設定ダイアログがキャンセルで閉じられました。")
+        
+        dialog.Destroy()
         
     # イベントハンドラのプロキシメソッド
     def on_like(self, event):
@@ -228,3 +265,15 @@ class MainFrame(wx.Frame):
         """
         if hasattr(self, 'timeline') and hasattr(self.timeline, 'on_open_url'):
             self.timeline.on_open_url(event)
+    
+    def apply_timeline_settings(self):
+        """設定に基づいてタイムラインの自動取得を設定"""
+        if hasattr(self, 'timeline') and hasattr(self.timeline, 'set_auto_fetch'):
+            # 設定マネージャーから自動取得の設定を取得
+            auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)
+            fetch_interval = self.settings_manager.get('timeline.fetch_interval', 180)
+            
+            logger.debug(f"タイムラインの自動更新設定を適用: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}")
+            
+            # タイムラインビューに設定を適用
+            self.timeline.set_auto_fetch(auto_fetch, fetch_interval)
