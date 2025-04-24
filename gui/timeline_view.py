@@ -9,14 +9,266 @@ SSky - Blueskyクライアント
 import wx
 import wx.lib.mixins.listctrl as listmix
 import logging
+import time
 from utils.time_format import format_relative_time
 from gui.dialogs.post_detail_dialog import PostDetailDialog
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
-    """タイムラインビュークラス（リストビュー実装）"""
+# タイマーID
+TIMER_ID = 1000
+
+class TimelineView(wx.Panel):
+    """タイムラインビュークラス"""
+    
+    def __init__(self, parent):
+        """初期化
+        
+        Args:
+            parent: 親ウィンドウ
+        """
+        super(TimelineView, self).__init__(parent)
+        
+        # 自動取得の設定
+        self.auto_fetch_enabled = False
+        self.fetch_interval = 180  # デフォルト：180秒
+        
+        # タイマー
+        self.timer = wx.Timer(self, TIMER_ID)
+        
+        # UIの初期化
+        self.init_ui()
+        
+        # 投稿データの初期化
+        self.posts = []
+        self.post_count = 0
+        
+        # イベントバインド
+        self.Bind(wx.EVT_TIMER, self.on_timer, id=TIMER_ID)
+        self.Bind(wx.EVT_BUTTON, self.on_fetch_button, self.fetch_button)
+        
+        # アクセシビリティ
+        self.SetName("タイムラインパネル")
+        
+    def init_ui(self):
+        """UIの初期化"""
+        # メインレイアウト
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # ツールバー
+        toolbar_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        
+        # タイムライン取得ボタン
+        self.fetch_button = wx.Button(self, label="タイムライン取得", size=(150, -1))
+        self.fetch_button.SetToolTip("タイムラインを取得します (F5)")
+        toolbar_sizer.Add(self.fetch_button, 0, wx.ALL, 5)
+        
+        main_sizer.Add(toolbar_sizer, 0, wx.EXPAND)
+        
+        # タイトルラベル
+        title_label = wx.StaticText(self, label="ホームタイムライン")
+        # フォントを大きくして目立たせる
+        font = title_label.GetFont()
+        font.SetWeight(wx.FONTWEIGHT_BOLD)
+        title_label.SetFont(font)
+        main_sizer.Add(title_label, 0, wx.LEFT | wx.TOP, 10)
+        
+        # リストビュー
+        self.list_ctrl = TimelineListCtrl(self)
+        main_sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 5)
+        
+        self.SetSizer(main_sizer)
+        
+    def on_timer(self, event):
+        """タイマーイベント処理（自動取得）
+        
+        Args:
+            event: タイマーイベント
+        """
+        logger.debug(f"自動取得タイマー発火: {time.strftime('%H:%M:%S')}")
+        self.fetch_timeline()
+        
+    def on_fetch_button(self, event):
+        """タイムライン取得ボタンのイベント処理
+        
+        Args:
+            event: ボタンイベント
+        """
+        logger.debug("タイムライン取得ボタンがクリックされました")
+        self.fetch_timeline()
+        
+    def set_auto_fetch(self, enabled, interval=180):
+        """自動取得の設定
+        
+        Args:
+            enabled (bool): 自動取得の有効/無効
+            interval (int, optional): 取得間隔（秒）. デフォルトは180秒.
+        """
+        self.auto_fetch_enabled = enabled
+        self.fetch_interval = max(180, interval)  # 最小180秒
+        
+        # タイマーの設定
+        if self.timer.IsRunning():
+            self.timer.Stop()
+            
+        if enabled:
+            # ミリ秒単位でタイマーを設定
+            self.timer.Start(self.fetch_interval * 1000)
+            logger.debug(f"自動取得を有効化しました: {self.fetch_interval}秒間隔")
+        else:
+            logger.debug("自動取得を無効化しました")
+            
+        # レイアウトの更新
+        self.Layout()
+        
+    def show_not_logged_in_message(self):
+        """未ログイン状態のメッセージを表示"""
+        self.list_ctrl.show_not_logged_in_message()
+        
+    def fetch_timeline(self, client=None, selected_uri=None):
+        """Bluesky APIを使用してタイムラインを取得
+        
+        Args:
+            client (BlueskyClient, optional): Blueskyクライアント
+            selected_uri (str, optional): 選択する投稿のURI
+        """
+        # 現在選択されている投稿のURIを記憶（引数で指定されていない場合）
+        if selected_uri is None:
+            selected_uri = self.list_ctrl.get_selected_post_uri()
+            
+        # クライアントが渡されなかった場合は親フレームから取得
+        if not client:
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'client'):
+                client = frame.client
+        
+        # クライアントがない場合は未ログイン状態のメッセージを表示
+        if not client or not client.is_logged_in:
+            logger.warning("タイムラインの取得に失敗しました: クライアントが設定されていません")
+            self.show_not_logged_in_message()
+            return
+            
+        try:
+            # タイムラインの取得（最新50件）
+            logger.info("タイムラインを取得しています...")
+            timeline_data = client.get_timeline(limit=50)
+            
+            # 投稿データの変換
+            new_posts = []
+            edited_posts = []
+            
+            for post in timeline_data.feed:
+                # 投稿データを適切な形式に変換
+                post_data = {
+                    'username': post.post.author.display_name or post.post.author.handle,
+                    'handle': f"@{post.post.author.handle}",
+                    'author_handle': post.post.author.handle,  # 投稿者のハンドル（@なし）
+                    'content': post.post.record.text,
+                    'time': format_relative_time(post.post.indexed_at),  # 表示用の文字列
+                    'raw_timestamp': post.post.indexed_at,  # ソート用のオリジナルタイムスタンプ
+                    'likes': getattr(post.post, 'like_count', 0),
+                    'replies': getattr(post.post, 'reply_count', 0),
+                    'reposts': getattr(post.post, 'repost_count', 0),
+                    'uri': getattr(post.post, 'uri', None),  # 投稿のURI（削除に必要）
+                    'cid': getattr(post.post, 'cid', None),  # 投稿のCID（削除に必要）
+                    'is_own_post': post.post.author.handle == client.profile.handle,  # 自分の投稿かどうか
+                    # スレッド情報を追加
+                    'reply_parent': None,
+                    'reply_root': None,
+                    # facets情報を追加（URLなどの特殊要素の情報）
+                    'facets': getattr(post.post.record, 'facets', None)
+                }
+                
+                # スレッド情報を取得（返信の場合）
+                if hasattr(post.post.record, 'reply') and post.post.record.reply:
+                    logger.debug(f"返信投稿を検出: {post.post.uri}")
+                    
+                    # 親投稿の情報
+                    if hasattr(post.post.record.reply, 'parent'):
+                        parent_uri = getattr(post.post.record.reply.parent, 'uri', None)
+                        parent_cid = getattr(post.post.record.reply.parent, 'cid', None)
+                        
+                        if parent_uri and parent_cid:
+                            post_data['reply_parent'] = {
+                                'uri': parent_uri,
+                                'cid': parent_cid
+                            }
+                            logger.debug(f"親投稿情報: {parent_uri}")
+                    
+                    # ルート投稿の情報
+                    if hasattr(post.post.record.reply, 'root'):
+                        root_uri = getattr(post.post.record.reply.root, 'uri', None)
+                        root_cid = getattr(post.post.record.reply.root, 'cid', None)
+                        
+                        if root_uri and root_cid:
+                            post_data['reply_root'] = {
+                                'uri': root_uri,
+                                'cid': root_cid
+                            }
+                            logger.debug(f"ルート投稿情報: {root_uri}")
+                
+                # 既存の投稿かどうかをチェック
+                existing_post_index = self.list_ctrl.find_post_by_uri(post_data['uri'])
+                
+                if existing_post_index >= 0:
+                    # 既存の投稿がある場合、内容が変更されているかチェック
+                    existing_post = self.list_ctrl.posts[existing_post_index]
+                    if existing_post['content'] != post_data['content']:
+                        # 内容が変更されている場合は編集された投稿として記録
+                        logger.debug(f"編集された投稿を検出: {post_data['uri']}")
+                        edited_posts.append((existing_post_index, post_data))
+                else:
+                    # 新しい投稿の場合はリストに追加
+                    new_posts.append(post_data)
+            
+            # 編集された投稿を更新
+            if edited_posts:
+                for index, post_data in edited_posts:
+                    self.list_ctrl.update_post(index, post_data)
+                
+                # 編集された投稿がある旨の警告ダイアログを表示
+                wx.MessageBox(
+                    f"{len(edited_posts)}件の投稿が編集されています。",
+                    "投稿の編集を検出",
+                    wx.OK | wx.ICON_INFORMATION
+                )
+            
+            # 新しい投稿を追加
+            if new_posts:
+                # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
+                new_posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
+                self.list_ctrl.add_posts(new_posts)
+                logger.info(f"新しい投稿を追加しました: {len(new_posts)}件")
+            
+            # 以前選択していた投稿と同じURIを持つ投稿を選択
+            if selected_uri:
+                self.list_ctrl.select_post_by_uri(selected_uri)
+            
+            logger.info(f"タイムラインを取得しました: 新規={len(new_posts)}件, 編集={len(edited_posts)}件")
+            
+        except Exception as e:
+            logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
+    
+    def on_open_url(self, event):
+        """URLを開くアクション
+        
+        Args:
+            event: メニューイベント
+        """
+        self.list_ctrl.on_open_url(event)
+    
+    def get_selected_post(self):
+        """選択中の投稿データを取得
+        
+        Returns:
+            dict: 選択中の投稿データ。選択されていない場合はNone
+        """
+        return self.list_ctrl.get_selected_post()
+
+
+class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
+    """タイムラインリストコントロールクラス"""
     
     def __init__(self, parent):
         """初期化
@@ -43,9 +295,6 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         self.posts = []
         self.post_count = 0
         
-        # UIの初期化
-        self.init_ui()
-        
         # イベントバインド
         self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.on_item_selected)
         self.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
@@ -53,7 +302,7 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
         
         # アクセシビリティ
-        self.SetName("タイムラインビュー")
+        self.SetName("タイムラインリスト")
         
         # フォーカス設定
         self.SetFocus()
@@ -136,6 +385,14 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         key_code = event.GetKeyCode()
         ctrl_down = event.ControlDown()
         shift_down = event.ShiftDown()
+        
+        # F5キーでタイムライン更新
+        if key_code == wx.WXK_F5:
+            # 親パネルのタイムライン取得メソッドを呼び出す
+            parent = self.GetParent()
+            if hasattr(parent, 'on_fetch_button'):
+                parent.on_fetch_button(event)
+            return
         
         # 選択されている項目がない場合は通常のキー処理を行う
         if self.selected_index == -1:
@@ -479,3 +736,103 @@ class TimelineView(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         if 0 <= self.selected_index < len(self.posts):
             return self.posts[self.selected_index]
         return None
+    
+    def get_selected_post_uri(self):
+        """選択中の投稿のURIを取得
+        
+        Returns:
+            str: 選択中の投稿のURI。選択されていない場合はNone
+        """
+        post = self.get_selected_post()
+        if post:
+            return post.get('uri')
+        return None
+    
+    def find_post_by_uri(self, uri):
+        """URIから投稿を検索
+        
+        Args:
+            uri (str): 検索する投稿のURI
+            
+        Returns:
+            int: 投稿のインデックス。見つからない場合は-1
+        """
+        if not uri:
+            return -1
+            
+        for i, post in enumerate(self.posts):
+            if post.get('uri') == uri:
+                return i
+        return -1
+    
+    def update_post(self, index, post_data):
+        """投稿を更新
+        
+        Args:
+            index (int): 更新する投稿のインデックス
+            post_data (dict): 新しい投稿データ
+            
+        Returns:
+            bool: 更新に成功した場合はTrue
+        """
+        if 0 <= index < len(self.posts):
+            # 投稿データを更新
+            self.posts[index] = post_data
+            
+            # リストビューの表示を更新
+            self.SetItem(index, 0, post_data['username'])
+            self.SetItem(index, 1, post_data['content'])
+            self.SetItem(index, 2, post_data['time'])
+            
+            logger.debug(f"投稿を更新しました: index={index}, uri={post_data.get('uri')}")
+            return True
+        return False
+    
+    def add_posts(self, new_posts):
+        """新しい投稿を追加
+        
+        Args:
+            new_posts (list): 追加する投稿のリスト
+            
+        Returns:
+            int: 追加された投稿の数
+        """
+        if not new_posts:
+            return 0
+            
+        # 現在の投稿数
+        current_count = len(self.posts)
+        
+        # 新しい投稿を追加
+        self.posts.extend(new_posts)
+        self.post_count = len(self.posts)
+        
+        # リストビューに追加
+        for i, post in enumerate(new_posts, start=current_count):
+            index = self.InsertItem(i, post['username'])
+            self.SetItem(index, 1, post['content'])
+            self.SetItem(index, 2, post['time'])
+            self.SetItemData(index, i)
+        
+        logger.debug(f"新しい投稿を追加しました: {len(new_posts)}件")
+        return len(new_posts)
+    
+    def select_post_by_uri(self, uri):
+        """URIから投稿を選択
+        
+        Args:
+            uri (str): 選択する投稿のURI
+            
+        Returns:
+            bool: 選択に成功した場合はTrue
+        """
+        index = self.find_post_by_uri(uri)
+        if index >= 0:
+            self.Select(index)
+            self.Focus(index)
+            self.selected_index = index
+            # 選択した項目が表示されるようにスクロール
+            self.EnsureVisible(index)
+            logger.debug(f"投稿を選択しました: index={index}, uri={uri}")
+            return True
+        return False
