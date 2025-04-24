@@ -34,6 +34,13 @@ class PostHandlers:
         self.parent = parent
         self.client = client
         
+        # 設定マネージャーの取得
+        if hasattr(parent, 'settings_manager'):
+            self.settings_manager = parent.settings_manager
+        else:
+            from config.settings_manager import SettingsManager
+            self.settings_manager = SettingsManager()
+        
     def on_new_post(self, event):
         """新規投稿ダイアログを表示
         
@@ -89,9 +96,7 @@ class PostHandlers:
                         self.client.send_post(text=post_content)
                     
                     # 投稿成功
-                    wx.MessageBox("投稿が完了しました", "投稿完了", wx.OK | wx.ICON_INFORMATION)
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("投稿が完了しました")
+                    self.show_completion_dialog("投稿が完了しました", "投稿完了")
                     
                     # タイムラインを更新
                     if hasattr(self.parent, 'timeline'):
@@ -210,9 +215,7 @@ class PostHandlers:
                     self.client.reply_to_post(reply_text, reply_to)
                     
                     # 返信成功
-                    wx.MessageBox("返信が完了しました", "返信完了", wx.OK | wx.ICON_INFORMATION)
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("返信が完了しました")
+                    self.show_completion_dialog("返信が完了しました", "返信完了")
                     
                     # タイムラインを更新
                     if hasattr(self.parent, 'timeline'):
@@ -276,9 +279,7 @@ class PostHandlers:
                     self.client.quote_post(quote_text, quote_of)
                     
                     # 引用成功
-                    wx.MessageBox("引用が完了しました", "引用完了", wx.OK | wx.ICON_INFORMATION)
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("引用が完了しました")
+                    self.show_completion_dialog("引用が完了しました", "引用完了")
                     
                     # タイムラインを更新
                     if hasattr(self.parent, 'timeline'):
@@ -394,6 +395,29 @@ class PostHandlers:
         
         dlg.Destroy()
         return False
+    
+    def show_completion_dialog(self, message, title):
+        """完了ダイアログを表示（設定に応じて）
+        
+        Args:
+            message (str): ダイアログメッセージ
+            title (str): ダイアログタイトル
+            
+        Returns:
+            bool: ダイアログを表示した場合はTrue
+        """
+        # 設定値を取得（デフォルトはTrue）
+        show_dialog = self.settings_manager.get('post.show_completion_dialog', True)
+        
+        # 設定に応じてダイアログを表示
+        if show_dialog:
+            wx.MessageBox(message, title, wx.OK | wx.ICON_INFORMATION)
+            return True
+        else:
+            # ダイアログを表示しない場合はステータスバーのみ更新
+            if hasattr(self.parent, 'statusbar'):
+                self.parent.statusbar.SetStatusText(message)
+            return False
     
     def on_profile(self, event):
         """プロフィール表示アクション
