@@ -31,7 +31,7 @@ def setup_logging(app_name="ssky"):
     # ロガーの設定
     # コンソールとファイルの両方にログを出力
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)  # INFOからDEBUGに変更
 
     # 既存のハンドラをクリア
     for handler in logger.handlers[:]:
