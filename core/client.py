@@ -11,6 +11,11 @@ import mimetypes
 from atproto import Client as AtprotoClient
 from atproto.exceptions import AtProtocolError
 
+# 認証エラー用の例外クラス
+class AuthenticationError(Exception):
+    """認証エラーを表す例外クラス"""
+    pass
+
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
@@ -28,6 +33,103 @@ class BlueskyClient:
         from core.data_store import DataStore
         self.data_store = DataStore()
         
+    def handle_api_error(self, error, operation_name="API操作"):
+        """API呼び出し時のエラーを処理
+        
+        Args:
+            error: 発生したエラー
+            operation_name: 操作の名前（エラーメッセージ用）
+            
+        Returns:
+            bool: 再ログインが必要な場合はTrue
+        """
+        if isinstance(error, AtProtocolError):
+            # 認証エラーかどうかを確認
+            if "auth" in str(error).lower() or "authentication" in str(error).lower():
+                logger.error(f"{operation_name}中に認証エラーが発生しました: {str(error)}")
+                
+                # ログイン状態をリセット
+                self.is_logged_in = False
+                self.profile = None
+                
+                # 再ログインが必要
+                return True
+        
+        # その他のエラー
+        logger.error(f"{operation_name}中にエラーが発生しました: {str(error)}")
+        return False
+    
+    def export_session_string(self):
+        """セッション情報を文字列としてエクスポート
+        
+        Returns:
+            str: セッション情報の文字列。エクスポート失敗時はNone
+        """
+        if not self.is_logged_in:
+            logger.error("セッション情報のエクスポートに失敗しました: ログインしていません")
+            return None
+            
+        try:
+            # セッション情報をエクスポート
+            session_string = self.client.export_session_string()
+            logger.debug("セッション情報をエクスポートしました")
+            logger.debug(f"エクスポートされたセッション文字列: {session_string}")
+            return session_string
+        except Exception as e:
+            logger.error(f"セッション情報のエクスポートに失敗しました: {str(e)}")
+            return None
+    
+    def login_with_session(self, session_string):
+        """セッション情報を使用してログイン
+        
+        Args:
+            session_string (str): セッション情報の文字列
+            
+        Returns:
+            object: プロフィール情報。ログイン失敗時は例外が発生
+            
+        Raises:
+            AuthenticationError: セッションが無効な場合
+            Exception: その他のエラー
+        """
+        try:
+            logger.debug(f"セッション情報を使用してログイン試行: 型={type(session_string)}")
+            
+            # セッション情報をそのまま使用（バイト列への変換なし）
+            # atprotoライブラリが文字列を直接処理できるか試す
+            try:
+                # まず文字列のままで試す
+                logger.debug("文字列のままでログイン試行")
+                self.profile = self.client.login(session_string=session_string)
+            except Exception as e:
+                logger.debug(f"文字列でのログインに失敗: {str(e)}")
+                
+                # 文字列での試行が失敗した場合、バイト列に変換して再試行
+                if isinstance(session_string, str):
+                    logger.debug("セッション情報を文字列からバイト列に変換して再試行")
+                    session_bytes = session_string.encode('utf-8')
+                    self.profile = self.client.login(session_string=session_bytes)
+                else:
+                    # 既にバイト列の場合はそのまま使用
+                    logger.debug("セッション情報はバイト列なのでそのまま使用")
+                    self.profile = self.client.login(session_string=session_string)
+            
+            # ユーザーDIDを保存
+            self.user_did = self.client.me.did
+            logger.debug(f"ユーザーDID: {self.user_did}")
+            
+            # ログイン状態を更新
+            self.is_logged_in = True
+            
+            logger.info(f"セッションを使用したログインに成功しました: {self.profile.handle}")
+            return self.profile
+                
+        except Exception as e:
+            logger.error(f"セッションを使用したログインに失敗しました: {str(e)}")
+            self.is_logged_in = False
+            self.profile = None
+            raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+    
     def login(self, username, password):
         """Blueskyにログイン
         
@@ -98,6 +200,7 @@ class BlueskyClient:
             object: タイムラインデータ。取得失敗時は例外が発生
             
         Raises:
+            AuthenticationError: 認証エラーの場合
             AtProtocolError: API呼び出し失敗時
             Exception: その他のエラー
         """
@@ -113,7 +216,11 @@ class BlueskyClient:
             return timeline_data
             
         except AtProtocolError as e:
-            logger.error(f"タイムライン取得時にBluesky APIエラー: {str(e)}")
+            # 認証エラーかどうかを確認
+            if self.handle_api_error(e, "タイムライン取得"):
+                # 認証エラーの場合は特別なエラーを発生させる
+                raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+            # その他のAPIエラーはそのまま再発生
             raise
             
         except Exception as e:

@@ -56,6 +56,7 @@ def format_relative_time(timestamp):
             dt = timestamp
         
         # 現在時刻との差を計算
+        # 推奨される方法でUTC時間を取得
         now = datetime.now(timezone.utc)
         diff = now - dt
         

@@ -59,7 +59,7 @@ class MainFrame(wx.Frame):
         self.Centre()
         
         # 保存されたセッションを読み込み
-        self.auth_handlers.load_saved_session()
+        self.auth_handlers.load_session()
         
         # 設定に基づいて自動取得を設定
         self.apply_timeline_settings()
@@ -91,9 +91,11 @@ class MainFrame(wx.Frame):
         
         # アプリメニュー
         app_menu = wx.Menu()
-        self.login_item = app_menu.Append(wx.ID_ANY, "ログイン情報の設定(&A)", "Blueskyのログイン情報を設定")
+        self.login_item = app_menu.Append(wx.ID_ANY, "Blueskyにログイン(&A)", "Blueskyにログイン")
         self.logout_item = app_menu.Append(wx.ID_ANY, "ログアウト(&L)", "Blueskyからログアウト")
         self.logout_item.Enable(False)  # 初期状態では無効
+        app_menu.AppendSeparator()  # 区切り線
+        reset_db_item = app_menu.Append(wx.ID_ANY, "データベースをリセット(&R)", "データベースをリセットして再初期化")
         app_menu.AppendSeparator()  # 区切り線
         exit_item = app_menu.Append(wx.ID_EXIT, "終了(&X)", "アプリケーションを終了")
         
@@ -125,6 +127,7 @@ class MainFrame(wx.Frame):
         # イベントバインド
         self.Bind(wx.EVT_MENU, self.auth_handlers.on_login, self.login_item)
         self.Bind(wx.EVT_MENU, self.auth_handlers.on_logout, self.logout_item)
+        self.Bind(wx.EVT_MENU, self.on_reset_database, reset_db_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_new_post, new_post_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_like, like_item)
@@ -144,6 +147,9 @@ class MainFrame(wx.Frame):
         """
         self.username = username
         self.SetTitle(f"SSky - [{username}]")
+        
+        # ログイン状態も更新
+        self.update_login_status(True)
     
     def update_login_status(self, is_logged_in):
         """ログイン状態に応じてUIを更新
@@ -265,6 +271,68 @@ class MainFrame(wx.Frame):
         """
         if hasattr(self, 'timeline') and hasattr(self.timeline, 'on_open_url'):
             self.timeline.on_open_url(event)
+    
+    def on_reset_database(self, event):
+        """データベースをリセット
+        
+        Args:
+            event: メニューイベント
+        """
+        # 確認ダイアログを表示
+        dlg = wx.MessageDialog(
+            self,
+            "データベースをリセットすると、すべてのログイン情報とセッション情報が削除されます。\n"
+            "アプリケーションを再起動する必要があります。\n\n"
+            "続行しますか？",
+            "データベースのリセット確認",
+            wx.YES_NO | wx.ICON_EXCLAMATION
+        )
+        
+        result = dlg.ShowModal()
+        dlg.Destroy()
+        
+        if result == wx.ID_YES:
+            import os
+            
+            # データベースファイルのパスを取得
+            db_path = self.auth_manager.data_store.db_path
+            
+            # ログアウト処理を実行（セッション情報をクリア）
+            if self.client and hasattr(self.client, 'profile') and self.client.profile:
+                self.auth_handlers.on_logout(None)
+            
+            # データベースファイルを削除
+            try:
+                if os.path.exists(db_path):
+                    os.remove(db_path)
+                    logger.info(f"データベースファイルを削除しました: {db_path}")
+                    
+                    # 成功メッセージを表示
+                    wx.MessageBox(
+                        "データベースをリセットしました。\n"
+                        "アプリケーションを再起動してください。",
+                        "データベースのリセット完了",
+                        wx.OK | wx.ICON_INFORMATION
+                    )
+                    
+                    # アプリケーションを終了
+                    self.Close()
+                else:
+                    logger.warning(f"データベースファイルが見つかりませんでした: {db_path}")
+                    wx.MessageBox(
+                        "データベースファイルが見つかりませんでした。\n"
+                        "アプリケーションを再起動してください。",
+                        "警告",
+                        wx.OK | wx.ICON_WARNING
+                    )
+            except Exception as e:
+                logger.error(f"データベースファイルの削除に失敗しました: {str(e)}")
+                wx.MessageBox(
+                    f"データベースファイルの削除に失敗しました: {str(e)}\n"
+                    "アプリケーションを再起動して再試行してください。",
+                    "エラー",
+                    wx.OK | wx.ICON_ERROR
+                )
     
     def apply_timeline_settings(self):
         """設定に基づいてタイムラインの自動取得を設定"""

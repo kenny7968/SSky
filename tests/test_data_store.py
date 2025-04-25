@@ -32,15 +32,28 @@ class TestDataStore(unittest.TestCase):
     
     def tearDown(self):
         """テスト後のクリーンアップ"""
-        # データベース接続を閉じる
-        del self.data_store
+        # データベース接続を確実に閉じる
+        try:
+            del self.data_store
+        except:
+            pass
+        
+        # 少し待ってからファイルを削除
+        import time
+        time.sleep(0.1)
         
         # データベースファイルを削除
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
+        try:
+            if os.path.exists(self.db_path):
+                os.remove(self.db_path)
+        except:
+            pass
         
         # 一時ディレクトリを削除
-        os.rmdir(self.temp_dir)
+        try:
+            os.rmdir(self.temp_dir)
+        except:
+            pass
     
     def test_init_db(self):
         """データベース初期化のテスト"""
@@ -55,49 +68,16 @@ class TestDataStore(unittest.TestCase):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
         self.assertIsNotNone(cursor.fetchone())
         
-        # credentialsテーブルの確認
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='credentials'")
+        # usersテーブルの確認
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        self.assertIsNotNone(cursor.fetchone())
+        
+        # db_versionテーブルの確認
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
         self.assertIsNotNone(cursor.fetchone())
         
         conn.close()
     
-    def test_save_and_load_credentials(self):
-        """認証情報の保存と読み込みのテスト"""
-        # テストデータ
-        username = 'test_user'
-        encrypted_password = b'encrypted_password'
-        
-        # 保存
-        result = self.data_store.save_credentials(username, encrypted_password)
-        self.assertTrue(result)
-        
-        # 読み込み
-        loaded_username, loaded_password = self.data_store.load_credentials()
-        self.assertEqual(loaded_username, username)
-        self.assertEqual(loaded_password, encrypted_password)
-    
-    def test_delete_credentials(self):
-        """認証情報の削除のテスト"""
-        # テストデータを保存
-        username = 'test_user'
-        encrypted_password = b'encrypted_password'
-        self.data_store.save_credentials(username, encrypted_password)
-        
-        # 削除
-        result = self.data_store.delete_credentials()
-        self.assertTrue(result)
-        
-        # 読み込み - 削除されているはず
-        loaded_username, loaded_password = self.data_store.load_credentials()
-        self.assertIsNone(loaded_username)
-        self.assertIsNone(loaded_password)
-    
-    def test_load_credentials_empty(self):
-        """空のデータベースからの認証情報読み込みのテスト"""
-        # 読み込み
-        loaded_username, loaded_password = self.data_store.load_credentials()
-        self.assertIsNone(loaded_username)
-        self.assertIsNone(loaded_password)
     
     def test_save_and_load_session(self):
         """セッション情報の保存と読み込みのテスト"""
@@ -134,22 +114,6 @@ class TestDataStore(unittest.TestCase):
         loaded_session = self.data_store.load_session('did:plc:test_user')
         self.assertIsNone(loaded_session)
     
-    def test_multiple_credentials(self):
-        """複数の認証情報の保存と最新の読み込みのテスト"""
-        # 1つ目のテストデータを保存
-        username1 = 'test_user1'
-        encrypted_password1 = b'encrypted_password1'
-        self.data_store.save_credentials(username1, encrypted_password1)
-        
-        # 2つ目のテストデータを保存
-        username2 = 'test_user2'
-        encrypted_password2 = b'encrypted_password2'
-        self.data_store.save_credentials(username2, encrypted_password2)
-        
-        # 読み込み - 最新のデータが取得されるはず
-        loaded_username, loaded_password = self.data_store.load_credentials()
-        self.assertEqual(loaded_username, username2)
-        self.assertEqual(loaded_password, encrypted_password2)
     
     def test_multiple_sessions(self):
         """複数のセッション情報の保存と読み込みのテスト"""

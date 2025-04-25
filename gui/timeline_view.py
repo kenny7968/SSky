@@ -307,7 +307,25 @@ class TimelineView(wx.Panel):
             logger.info(f"タイムラインを取得しました: 新規={len(new_posts)}件, 編集={len(edited_posts)}件")
             
         except Exception as e:
-            logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
+            # 認証エラーの場合は特別な処理
+            from core.client import AuthenticationError
+            if isinstance(e, AuthenticationError):
+                logger.error(f"認証エラー: {str(e)}")
+                wx.MessageBox(
+                    "セッションが無効になりました。再ログインが必要です。",
+                    "認証エラー",
+                    wx.OK | wx.ICON_ERROR
+                )
+                
+                # 親フレームのログインダイアログを表示
+                frame = wx.GetTopLevelParent(self)
+                if hasattr(frame, 'auth_handlers') and hasattr(frame.auth_handlers, 'on_login'):
+                    wx.CallAfter(frame.auth_handlers.on_login, None)
+                    
+                # 未ログイン状態のメッセージを表示
+                self.show_not_logged_in_message()
+            else:
+                logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
     
     def on_open_url(self, event):
         """URLを開くアクション
