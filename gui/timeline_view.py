@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 # タイマーID
 TIMER_ID = 1000
+TIME_UPDATE_TIMER_ID = 1001
 
 class TimelineView(wx.Panel):
     """タイムラインビュークラス"""
@@ -36,6 +37,7 @@ class TimelineView(wx.Panel):
         
         # タイマー
         self.timer = wx.Timer(self, TIMER_ID)
+        self.time_update_timer = wx.Timer(self, TIME_UPDATE_TIMER_ID)
         
         # UIの初期化
         self.init_ui()
@@ -46,7 +48,11 @@ class TimelineView(wx.Panel):
         
         # イベントバインド
         self.Bind(wx.EVT_TIMER, self.on_timer, id=TIMER_ID)
+        self.Bind(wx.EVT_TIMER, self.on_time_update_timer, id=TIME_UPDATE_TIMER_ID)
         self.Bind(wx.EVT_BUTTON, self.on_fetch_button, self.fetch_button)
+        
+        # 時間表示更新タイマーを開始（1分ごと）
+        self.time_update_timer.Start(60 * 1000)  # 60秒 = 1分
         
         # アクセシビリティ
         self.SetName("タイムラインパネル")
@@ -88,6 +94,35 @@ class TimelineView(wx.Panel):
         """
         logger.debug(f"自動取得タイマー発火: {time.strftime('%H:%M:%S')}")
         self.fetch_timeline()
+    
+    def on_time_update_timer(self, event):
+        """時間表示更新タイマーイベント処理
+        
+        Args:
+            event: タイマーイベント
+        """
+        logger.debug(f"時間表示更新タイマー発火: {time.strftime('%H:%M:%S')}")
+        self.update_post_times()
+    
+    def update_post_times(self):
+        """投稿の時間表示を更新"""
+        if not self.list_ctrl.posts:
+            return
+            
+        # 投稿の時間表示を更新
+        updated = False
+        for i, post in enumerate(self.list_ctrl.posts):
+            # raw_timestampから相対時間を再計算
+            new_time = format_relative_time(post['raw_timestamp'])
+            
+            # 表示が変わった場合のみ更新
+            if new_time != post['time']:
+                post['time'] = new_time
+                self.list_ctrl.SetItem(i, 2, new_time)
+                updated = True
+                
+        if updated:
+            logger.debug("投稿の時間表示を更新しました")
         
     def on_fetch_button(self, event):
         """タイムライン取得ボタンのイベント処理
