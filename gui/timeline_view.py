@@ -214,8 +214,7 @@ class TimelineView(wx.Panel):
             timeline_data = client.get_timeline(limit=50)
             
             # 投稿データの変換
-            new_posts = []
-            edited_posts = []
+            posts = []
             
             for post in timeline_data.feed:
                 # 投稿データを適切な形式に変換
@@ -267,44 +266,34 @@ class TimelineView(wx.Panel):
                             }
                             logger.debug(f"ルート投稿情報: {root_uri}")
                 
-                # 既存の投稿かどうかをチェック
-                existing_post_index = self.list_ctrl.find_post_by_uri(post_data['uri'])
-                
-                if existing_post_index >= 0:
-                    # 既存の投稿がある場合、内容が変更されているかチェック
-                    existing_post = self.list_ctrl.posts[existing_post_index]
-                    if existing_post['content'] != post_data['content']:
-                        # 内容が変更されている場合は編集された投稿として記録
-                        logger.debug(f"編集された投稿を検出: {post_data['uri']}")
-                        edited_posts.append((existing_post_index, post_data))
-                else:
-                    # 新しい投稿の場合はリストに追加
-                    new_posts.append(post_data)
+                # 投稿をリストに追加
+                posts.append(post_data)
             
-            # 編集された投稿を更新
-            if edited_posts:
-                for index, post_data in edited_posts:
-                    self.list_ctrl.update_post(index, post_data)
-                
-                # 編集された投稿がある旨の警告ダイアログを表示
-                wx.MessageBox(
-                    f"{len(edited_posts)}件の投稿が編集されています。",
-                    "投稿の編集を検出",
-                    wx.OK | wx.ICON_INFORMATION
-                )
+            # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
+            posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
             
-            # 新しい投稿を追加
-            if new_posts:
-                # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
-                new_posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
-                self.list_ctrl.add_posts(new_posts)
-                logger.info(f"新しい投稿を追加しました: {len(new_posts)}件")
+            # リストビューをクリア
+            self.list_ctrl.DeleteAllItems()
+            
+            # 投稿データを更新
+            self.list_ctrl.posts = posts
+            self.list_ctrl.post_count = len(posts)
+            
+            # リストビューに投稿を追加
+            for i, post in enumerate(posts):
+                index = self.list_ctrl.InsertItem(i, post['username'])
+                self.list_ctrl.SetItem(index, 1, post['content'])
+                self.list_ctrl.SetItem(index, 2, post['time'])
+                self.list_ctrl.SetItemData(index, i)
             
             # 以前選択していた投稿と同じURIを持つ投稿を選択
             if selected_uri:
                 self.list_ctrl.select_post_by_uri(selected_uri)
             
-            logger.info(f"タイムラインを取得しました: 新規={len(new_posts)}件, 編集={len(edited_posts)}件")
+            logger.info(f"タイムラインを取得しました: {len(posts)}件")
+            
+            # 再描画を強制
+            wx.CallAfter(self.list_ctrl.Refresh)
             
         except Exception as e:
             # 認証エラーの場合は特別な処理
