@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import logging
 from utils.url_utils import extract_urls, open_url, handle_urls_in_text, extract_urls_from_facets
+from utils.time_format import format_timestamp_to_jst
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -129,7 +130,8 @@ class PostDetailDialog(wx.Dialog):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         
         # 投稿内容（リードオンリーエディット）- 全ての情報を含む
-        content_text = f"{self.post_data['username']} {self.post_data['handle']} - {self.post_data['time']}\n\n"
+        content_text = f"{self.post_data['username']} {self.post_data['handle']}\n"
+        content_text += f"{format_timestamp_to_jst(self.post_data['raw_timestamp'])}\n\n"
         content_text += f"{self.post_data['content']}\n\n"
         content_text += f"いいね: {self.post_data['likes']}  返信: {self.post_data['replies']}  リポスト: {self.post_data['reposts']}"
         
