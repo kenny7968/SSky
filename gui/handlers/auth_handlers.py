@@ -74,7 +74,8 @@ class AuthHandlers:
             if hasattr(self.parent, 'statusbar'):
                 self.parent.statusbar.SetStatusText("Blueskyにログイン中...")
             
-            logger.debug(f"ログイン試行: ユーザー名={username}")
+            # ユーザー名はログに出力しない（セキュリティ上の理由から）
+            logger.debug("ログイン試行を開始します")
             
             try:
                 # ログイン試行

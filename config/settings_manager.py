@@ -49,6 +49,9 @@ class SettingsManager:
             },
             "post": {
                 "show_completion_dialog": True  # 投稿・返信・引用時に完了ダイアログを表示
+            },
+            "advanced": {
+                "enable_debug_log": False  # デバッグログを有効にする
             }
         }
         

@@ -63,7 +63,8 @@ class AuthManager:
                 session_data = decrypt_data(encrypted_session)
                 if session_data:
                     logger.debug(f"最新のセッション情報を復号化しました: {user_did}")
-                    logger.debug(f"復号化されたセッション文字列: {session_data}")
+                    # セキュリティ上の理由からセッション文字列の内容はログに出力しない
+                    logger.debug("セッション文字列を復号化しました（セキュリティ上の理由から内容は表示しません）")
                     return session_data, user_did
                 else:
                     logger.error("セッションデータの復号化に失敗しました")

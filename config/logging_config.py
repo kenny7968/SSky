@@ -21,6 +21,15 @@ def setup_logging(app_name="ssky"):
     Returns:
         logging.Logger: 設定済みのロガーオブジェクト
     """
+    # 設定マネージャーからデバッグログの有効/無効を取得
+    try:
+        from config.settings_manager import SettingsManager
+        settings_manager = SettingsManager()
+        enable_debug_log = settings_manager.get('advanced.enable_debug_log', False)
+    except Exception:
+        # 設定マネージャーの取得に失敗した場合はデフォルト値を使用
+        enable_debug_log = False
+    
     # ログディレクトリの確認と作成
     log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'log')
     ensure_directory_exists(log_dir)
@@ -31,7 +40,7 @@ def setup_logging(app_name="ssky"):
     # ロガーの設定
     # コンソールとファイルの両方にログを出力
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)  # INFOからDEBUGに変更
+    logger.setLevel(logging.DEBUG)  # ロガー自体のレベルはDEBUGに設定
 
     # 既存のハンドラをクリア
     for handler in logger.handlers[:]:
@@ -39,7 +48,8 @@ def setup_logging(app_name="ssky"):
 
     # コンソールハンドラ
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    # デバッグログが有効な場合はDEBUG、無効な場合はINFO
+    console_handler.setLevel(logging.DEBUG if enable_debug_log else logging.INFO)
     console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     console_handler.setFormatter(console_formatter)
 
@@ -50,7 +60,7 @@ def setup_logging(app_name="ssky"):
         backupCount=5,
         encoding='utf-8'
     )
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(logging.DEBUG)  # ファイルには常にDEBUGレベルで出力
     file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
 
@@ -61,8 +71,13 @@ def setup_logging(app_name="ssky"):
     # サードパーティライブラリのログレベルを調整
     logging.getLogger('httpx').setLevel(logging.WARNING)
     logging.getLogger('httpcore').setLevel(logging.WARNING)  # HTTPリクエストのログを抑制
-    logging.getLogger('gui.timeline_view').setLevel(logging.INFO)  # タイムラインビューのログを調整
     
-    logger.debug(f"{app_name}のロギング設定を完了しました")
+    # デバッグログが無効な場合は、ルートロガー以外のすべてのロガーのレベルをINFOに設定
+    if not enable_debug_log:
+        for logger_name in logging.root.manager.loggerDict:
+            if logger_name != '':  # ルートロガー以外
+                logging.getLogger(logger_name).setLevel(logging.INFO)
+    
+    logger.debug(f"{app_name}のロギング設定を完了しました（デバッグログ: {'有効' if enable_debug_log else '無効'}）")
     
     return logger

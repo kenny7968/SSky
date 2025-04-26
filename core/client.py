@@ -73,7 +73,8 @@ class BlueskyClient:
             # セッション情報をエクスポート
             session_string = self.client.export_session_string()
             logger.debug("セッション情報をエクスポートしました")
-            logger.debug(f"エクスポートされたセッション文字列: {session_string}")
+            # セキュリティ上の理由からセッション文字列の内容はログに出力しない
+            logger.debug("セッション文字列をエクスポートしました（セキュリティ上の理由から内容は表示しません）")
             return session_string
         except Exception as e:
             logger.error(f"セッション情報のエクスポートに失敗しました: {str(e)}")
