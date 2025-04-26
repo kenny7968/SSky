@@ -34,6 +34,7 @@ class TimelineView(wx.Panel):
         # 自動取得の設定
         self.auto_fetch_enabled = False
         self.fetch_interval = 180  # デフォルト：180秒
+        self.fetch_count = 50      # デフォルト：50件
         
         # タイマー
         self.timer = wx.Timer(self, TIMER_ID)
@@ -194,7 +195,7 @@ class TimelineView(wx.Panel):
         self.update_login_status(False)
         
     def fetch_timeline(self, client=None, selected_uri=None):
-        """Bluesky APIを使用してタイムラインを取得
+        """Bluesky APIを使用してタイムラインを取得し、既存の投稿を保持しつつ更新
         
         Args:
             client (BlueskyClient, optional): Blueskyクライアント
@@ -217,13 +218,15 @@ class TimelineView(wx.Panel):
             return
             
         try:
-            # タイムラインの取得（最新50件）
-            logger.info("タイムラインを取得しています...")
-            timeline_data = client.get_timeline(limit=50)
+            # タイムラインの取得
+            logger.info(f"タイムラインを取得しています... (最大{self.fetch_count}件)")
+            timeline_data = client.get_timeline(limit=self.fetch_count)
             
-            # 投稿データの変換
-            posts = []
+            # 新しく取得した投稿のURIセットを作成（高速検索用）
+            new_post_uris = set()
+            new_posts_dict = {}  # 一時的な辞書（URIをキー）
             
+            # 取得した投稿を処理
             for post in timeline_data.feed:
                 # 投稿データを適切な形式に変換
                 post_data = {
@@ -243,8 +246,92 @@ class TimelineView(wx.Panel):
                     'reply_parent': None,
                     'reply_root': None,
                     # facets情報を追加（URLなどの特殊要素の情報）
-                    'facets': getattr(post.post.record, 'facets', None)
+                    'facets': getattr(post.post.record, 'facets', None),
+                    # 引用ポスト情報を初期化
+                    'quote_of': None,
+                    'is_quote_post': False
                 }
+                
+                # embedフィールドの確認（引用ポストかどうか）
+                from atproto import models
+                if hasattr(post.post, 'embed'):
+                    embed = post.post.embed
+                    
+                    # 引用ポストの場合
+                    if isinstance(embed, models.AppBskyEmbedRecord.View):
+                        logger.debug(f"引用ポストを検出: {post.post.uri}")
+                        
+                        # 引用元レコードの情報を取得
+                        if hasattr(embed, 'record'):
+                            quoted_record = embed.record
+                            
+                            # ViewRecordの場合（通常のケース）
+                            if isinstance(quoted_record, models.AppBskyEmbedRecord.ViewRecord):
+                                quoted_author = quoted_record.author
+                                quoted_text = getattr(quoted_record.value, 'text', '[引用元テキストなし]')
+                                
+                                # 引用元情報を設定
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': quoted_author.display_name or quoted_author.handle,
+                                    'handle': f"@{quoted_author.handle}",
+                                    'content': quoted_text,
+                                    'uri': getattr(quoted_record, 'uri', None),
+                                    'cid': getattr(quoted_record, 'cid', None),
+                                    'like_count': getattr(quoted_record, 'like_count', 0),
+                                    'repost_count': getattr(quoted_record, 'repost_count', 0)
+                                }
+                                logger.debug(f"引用元情報: {quoted_author.handle} - {quoted_text[:30]}...")
+                            
+                            # 引用元が見つからない場合
+                            elif isinstance(quoted_record, models.AppBskyEmbedRecord.ViewNotFound):
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': '不明',
+                                    'handle': '@unknown',
+                                    'content': '[引用元投稿が見つかりません]',
+                                    'uri': None,
+                                    'cid': None
+                                }
+                                logger.debug("引用元投稿が見つかりません")
+                            
+                            # 引用元がブロックされている場合
+                            elif isinstance(quoted_record, models.AppBskyEmbedRecord.ViewBlocked):
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': 'ブロック',
+                                    'handle': '@blocked',
+                                    'content': '[引用元投稿はブロックされています]',
+                                    'uri': None,
+                                    'cid': None
+                                }
+                                logger.debug("引用元投稿はブロックされています")
+                    
+                    # 引用ポスト + メディアの場合
+                    elif isinstance(embed, models.AppBskyEmbedRecordWithMedia.View):
+                        logger.debug(f"引用ポスト + メディアを検出: {post.post.uri}")
+                        
+                        # 引用元レコードの情報を取得
+                        if hasattr(embed, 'record') and hasattr(embed.record, 'record'):
+                            quoted_record = embed.record.record
+                            
+                            # ViewRecordの場合（通常のケース）
+                            if isinstance(quoted_record, models.AppBskyEmbedRecord.ViewRecord):
+                                quoted_author = quoted_record.author
+                                quoted_text = getattr(quoted_record.value, 'text', '[引用元テキストなし]')
+                                
+                                # 引用元情報を設定
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': quoted_author.display_name or quoted_author.handle,
+                                    'handle': f"@{quoted_author.handle}",
+                                    'content': quoted_text,
+                                    'uri': getattr(quoted_record, 'uri', None),
+                                    'cid': getattr(quoted_record, 'cid', None),
+                                    'like_count': getattr(quoted_record, 'like_count', 0),
+                                    'repost_count': getattr(quoted_record, 'repost_count', 0)
+                                }
+                                logger.debug(f"引用元情報 (メディア付き): {quoted_author.handle} - {quoted_text[:30]}...")
                 
                 # スレッド情報を取得（返信の場合）
                 if hasattr(post.post.record, 'reply') and post.post.record.reply:
@@ -274,23 +361,79 @@ class TimelineView(wx.Panel):
                             }
                             logger.debug(f"ルート投稿情報: {root_uri}")
                 
-                # 投稿をリストに追加
-                posts.append(post_data)
+                uri = post_data['uri']
+                if uri:
+                    new_post_uris.add(uri)
+                    new_posts_dict[uri] = post_data
             
-            # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
-            posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
+            # 既存の投稿URIセットとマッピングを作成
+            existing_post_uris = set()
+            uri_to_index = {}  # URIからリストのインデックスへのマッピング
+            
+            for i, post in enumerate(self.list_ctrl.posts):
+                if 'uri' in post and post['uri']:
+                    uri = post['uri']
+                    existing_post_uris.add(uri)
+                    uri_to_index[uri] = i
+            
+            # 1. 新しく追加された投稿を特定
+            added_uris = new_post_uris - existing_post_uris
+            
+            # 2. 更新された投稿を特定（両方のセットに存在するURI）
+            updated_uris = new_post_uris.intersection(existing_post_uris)
+            updated_count = 0
+            
+            # テンポラリの投稿リストを作成（既存の投稿をコピー）
+            temp_posts = self.list_ctrl.posts.copy()
+            
+            # 既存の投稿を更新（インデックスマッピングを使用して高速化）
+            for uri in updated_uris:
+                if uri in uri_to_index:
+                    index = uri_to_index[uri]
+                    # 実際に変更があるかチェック（いいね数、リポスト数、返信数）
+                    old_post = temp_posts[index]
+                    new_post = new_posts_dict[uri]
+                    
+                    if (old_post['likes'] != new_post['likes'] or 
+                        old_post['reposts'] != new_post['reposts'] or 
+                        old_post['replies'] != new_post['replies']):
+                        # 投稿を更新
+                        temp_posts[index] = new_post
+                        updated_count += 1
+            
+            # 新しい投稿を追加
+            for uri in added_uris:
+                temp_posts.append(new_posts_dict[uri])
+            
+            # 投稿を日時でソート（古い順）
+            temp_posts.sort(key=lambda x: x['raw_timestamp'])
+            
+            # 投稿数を制限（オプション）
+            max_posts = 1000  # 保持する最大投稿数
+            if len(temp_posts) > max_posts:
+                # 新しい投稿を優先して保持（古い投稿を削除）
+                temp_posts = temp_posts[len(temp_posts) - max_posts:]
+                logger.debug(f"古い投稿を削除しました。残り{len(temp_posts)}件")
             
             # リストビューをクリア
             self.list_ctrl.DeleteAllItems()
             
             # 投稿データを更新
-            self.list_ctrl.posts = posts
-            self.list_ctrl.post_count = len(posts)
+            self.list_ctrl.posts = temp_posts
+            self.list_ctrl.post_count = len(temp_posts)
             
             # リストビューに投稿を追加
-            for i, post in enumerate(posts):
+            for i, post in enumerate(temp_posts):
                 index = self.list_ctrl.InsertItem(i, post['username'])
-                self.list_ctrl.SetItem(index, 1, post['content'])
+                
+                # 引用ポストの場合は引用元情報も表示
+                if post.get('is_quote_post', False) and post.get('quote_of'):
+                    quote_info = post['quote_of']
+                    display_content = f"{post['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+                else:
+                    display_content = post['content']
+                
+                self.list_ctrl.SetItem(index, 1, display_content)
                 self.list_ctrl.SetItem(index, 2, post['time'])
                 self.list_ctrl.SetItemData(index, i)
             
@@ -298,7 +441,7 @@ class TimelineView(wx.Panel):
             if selected_uri:
                 self.list_ctrl.select_post_by_uri(selected_uri)
             
-            logger.info(f"タイムラインを取得しました: {len(posts)}件")
+            logger.info(f"タイムラインを更新しました: 新規={len(added_uris)}件, 更新={updated_count}件, 合計={len(temp_posts)}件")
             
             # 再描画を強制
             wx.CallAfter(self.list_ctrl.Refresh)
@@ -336,8 +479,10 @@ class TimelineView(wx.Panel):
         """設定から自動取得の設定を読み込む"""
         auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)
         fetch_interval = self.settings_manager.get('timeline.fetch_interval', 180)
-        logger.debug(f"設定から自動取得の設定を読み込みました: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}")
+        fetch_count = self.settings_manager.get('timeline.fetch_count', 50)
+        logger.debug(f"設定から自動取得の設定を読み込みました: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}, fetch_count={fetch_count}")
         self.set_auto_fetch(auto_fetch, fetch_interval)
+        self.fetch_count = fetch_count
     
     def on_settings_changed(self, key=None):
         """設定変更時の処理
@@ -413,7 +558,15 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             
             # リストに追加
             index = self.InsertItem(i, user_text)
-            self.SetItem(index, 1, post['content'])
+            
+            # 引用ポストの場合は引用元情報も表示
+            if post.get('is_quote_post', False) and post.get('quote_of'):
+                quote_info = post['quote_of']
+                display_content = f"{post['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+            else:
+                display_content = post['content']
+                
+            self.SetItem(index, 1, display_content)
             self.SetItem(index, 2, post['time'])
             
             # データを関連付け
@@ -742,9 +895,16 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             # 投稿データを更新
             self.posts[index] = post_data
             
+            # 引用ポストの場合は引用元情報も表示
+            if post_data.get('is_quote_post', False) and post_data.get('quote_of'):
+                quote_info = post_data['quote_of']
+                display_content = f"{post_data['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+            else:
+                display_content = post_data['content']
+            
             # リストビューの表示を更新
             self.SetItem(index, 0, post_data['username'])
-            self.SetItem(index, 1, post_data['content'])
+            self.SetItem(index, 1, display_content)
             self.SetItem(index, 2, post_data['time'])
             
             logger.debug(f"投稿を更新しました: index={index}, uri={post_data.get('uri')}")
@@ -773,7 +933,15 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         # リストビューに追加
         for i, post in enumerate(new_posts, start=current_count):
             index = self.InsertItem(i, post['username'])
-            self.SetItem(index, 1, post['content'])
+            
+            # 引用ポストの場合は引用元情報も表示
+            if post.get('is_quote_post', False) and post.get('quote_of'):
+                quote_info = post['quote_of']
+                display_content = f"{post['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+            else:
+                display_content = post['content']
+                
+            self.SetItem(index, 1, display_content)
             self.SetItem(index, 2, post['time'])
             self.SetItemData(index, i)
         

@@ -45,7 +45,8 @@ class SettingsManager:
         self.default_settings = {
             "timeline": {
                 "auto_fetch": True,        # 投稿一覧を自動取得する
-                "fetch_interval": 600      # 自動取得の間隔（秒）
+                "fetch_interval": 600,     # 自動取得の間隔（秒）
+                "fetch_count": 50          # 投稿の取得件数（最大100件）
             },
             "post": {
                 "show_completion_dialog": True  # 投稿・返信・引用時に完了ダイアログを表示
@@ -233,6 +234,11 @@ class SettingsManager:
         if fetch_interval < 180:
             return False, "自動取得の間隔は180秒以上に設定してください。"
         
+        # 投稿の取得件数のバリデーション
+        fetch_count = self.get('timeline.fetch_count', 50)
+        if fetch_count < 1 or fetch_count > 100:
+            return False, "投稿の取得件数は1以上100以下に設定してください。"
+        
         # 他のバリデーションルールがあれば追加
         
         return True, None
@@ -253,6 +259,10 @@ class SettingsManager:
         if key == 'timeline.fetch_interval' and value < 180:
             return False, "自動取得の間隔は180秒以上に設定してください。"
         
+        # 投稿の取得件数のバリデーション
+        if key == 'timeline.fetch_count' and (value < 1 or value > 100):
+            return False, "投稿の取得件数は1以上100以下に設定してください。"
+        
         # 設定値の更新
         success = self.set(key, value)
         if not success:
@@ -267,6 +277,15 @@ class SettingsManager:
         if fetch_interval < 180:
             self.set('timeline.fetch_interval', 180)
             logger.info("自動取得の間隔が180秒未満だったため、180秒に設定しました。")
+        
+        # 投稿の取得件数が範囲外の場合は修正
+        fetch_count = self.get('timeline.fetch_count', 50)
+        if fetch_count < 1:
+            self.set('timeline.fetch_count', 1)
+            logger.info("投稿の取得件数が1未満だったため、1に設定しました。")
+        elif fetch_count > 100:
+            self.set('timeline.fetch_count', 100)
+            logger.info("投稿の取得件数が100を超えていたため、100に設定しました。")
     
     def _update_nested_dict(self, d, u):
         """ネストされた辞書を更新する
