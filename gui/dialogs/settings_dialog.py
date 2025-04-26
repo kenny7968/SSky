@@ -35,6 +35,7 @@ class SettingsDialog(wx.Dialog):
         # 設定値のキャッシュ
         self.settings_cache = {
             'timeline': {
+                'fetch_count': self.settings_manager.get('timeline.fetch_count', 50),
                 'auto_fetch': self.settings_manager.get('timeline.auto_fetch', True),
                 'fetch_interval': self.settings_manager.get('timeline.fetch_interval', 600)
             },
@@ -197,9 +198,24 @@ class SettingsDialog(wx.Dialog):
         # 設定項目の作成
         sizer = wx.BoxSizer(wx.VERTICAL)
         
+        # 投稿の取得件数
+        count_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        count_label = wx.StaticText(self.settings_panel, label="投稿の取得件数（最大100件）：")
+        self.fetch_count_spin = wx.SpinCtrl(
+            self.settings_panel,
+            min=1,
+            max=100,
+            initial=50
+        )
+        
+        count_sizer.Add(count_label, 0, wx.ALIGN_CENTER_VERTICAL)
+        count_sizer.Add(self.fetch_count_spin, 0, wx.LEFT, 5)
+        
+        sizer.Add(count_sizer, 0, wx.ALL, 10)
+        
         # 自動取得の設定
         self.auto_fetch_cb = wx.CheckBox(self.settings_panel, label="投稿一覧を自動取得する")
-        sizer.Add(self.auto_fetch_cb, 0, wx.ALL, 10)
+        sizer.Add(self.auto_fetch_cb, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         
         # 自動取得の間隔
         interval_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -219,6 +235,7 @@ class SettingsDialog(wx.Dialog):
         self.settings_panel.SetSizer(sizer)
         
         # 設定値の読み込み（キャッシュから）
+        self.fetch_count_spin.SetValue(self.settings_cache['timeline']['fetch_count'])
         self.auto_fetch_cb.SetValue(self.settings_cache['timeline']['auto_fetch'])
         self.fetch_interval_spin.SetValue(self.settings_cache['timeline']['fetch_interval'])
         
@@ -226,6 +243,7 @@ class SettingsDialog(wx.Dialog):
         self.auto_fetch_cb.Bind(wx.EVT_CHECKBOX, self.on_auto_fetch_changed)
         
         # 値が変更されたときのイベントハンドラを追加
+        self.fetch_count_spin.Bind(wx.EVT_SPINCTRL, self.on_count_changed)
         self.fetch_interval_spin.Bind(wx.EVT_SPINCTRL, self.on_interval_changed)
         
         # 初期状態の設定
@@ -285,6 +303,34 @@ class SettingsDialog(wx.Dialog):
         # キャッシュに値を保存
         self.settings_cache['timeline']['auto_fetch'] = enabled
         logger.debug(f"自動取得の有効/無効を変更しました: {enabled}")
+    
+    def on_count_changed(self, event):
+        """投稿の取得件数が変更されたときの処理
+        
+        Args:
+            event: スピンコントロールイベント
+        """
+        value = self.fetch_count_spin.GetValue()
+        if value < 1:
+            wx.MessageBox(
+                "投稿の取得件数は1以上に設定してください。",
+                "設定エラー",
+                wx.OK | wx.ICON_WARNING
+            )
+            self.fetch_count_spin.SetValue(1)
+            value = 1
+        elif value > 100:
+            wx.MessageBox(
+                "投稿の取得件数は100以下に設定してください。",
+                "設定エラー",
+                wx.OK | wx.ICON_WARNING
+            )
+            self.fetch_count_spin.SetValue(100)
+            value = 100
+        
+        # キャッシュに値を保存
+        self.settings_cache['timeline']['fetch_count'] = value
+        logger.debug(f"投稿の取得件数を変更しました: {value}件")
     
     def on_interval_changed(self, event):
         """自動取得の間隔が変更されたときの処理
@@ -351,16 +397,27 @@ class SettingsDialog(wx.Dialog):
         """
         try:
             # キャッシュから設定値を取得
+            fetch_count = self.settings_cache['timeline']['fetch_count']
             auto_fetch = self.settings_cache['timeline']['auto_fetch']
             fetch_interval = self.settings_cache['timeline']['fetch_interval']
             show_completion_dialog = self.settings_cache['post']['show_completion_dialog']
             enable_debug_log = self.settings_cache['advanced']['enable_debug_log']
             
             # 設定値の詳細をログに出力
-            logger.debug(f"保存する設定値: timeline.auto_fetch={auto_fetch}, timeline.fetch_interval={fetch_interval}, "
-                         f"post.show_completion_dialog={show_completion_dialog}, advanced.enable_debug_log={enable_debug_log}")
+            logger.debug(f"保存する設定値: timeline.fetch_count={fetch_count}, timeline.auto_fetch={auto_fetch}, "
+                         f"timeline.fetch_interval={fetch_interval}, post.show_completion_dialog={show_completion_dialog}, "
+                         f"advanced.enable_debug_log={enable_debug_log}")
             
             # バリデーション
+            if fetch_count < 1 or fetch_count > 100:
+                logger.warning(f"投稿の取得件数が範囲外です。値: {fetch_count}")
+                if fetch_count < 1:
+                    fetch_count = 1
+                    self.settings_cache['timeline']['fetch_count'] = 1
+                elif fetch_count > 100:
+                    fetch_count = 100
+                    self.settings_cache['timeline']['fetch_count'] = 100
+                
             if fetch_interval < 180:
                 logger.warning("自動取得の間隔が180秒未満です。180秒に設定します。")
                 fetch_interval = 180
@@ -368,6 +425,7 @@ class SettingsDialog(wx.Dialog):
             
             # 設定値の保存
             logger.debug("設定値をsettings_managerに設定します")
+            self.settings_manager.set('timeline.fetch_count', fetch_count)
             self.settings_manager.set('timeline.auto_fetch', auto_fetch)
             self.settings_manager.set('timeline.fetch_interval', fetch_interval)
             self.settings_manager.set('post.show_completion_dialog', show_completion_dialog)
