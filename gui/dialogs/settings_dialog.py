@@ -388,12 +388,6 @@ class SettingsDialog(wx.Dialog):
                 )
             else:
                 logger.debug("設定の保存に成功しました")
-                # 成功メッセージを表示
-                wx.MessageBox(
-                    "設定を保存しました。",
-                    "保存完了",
-                    wx.OK | wx.ICON_INFORMATION
-                )
             
             return success
         except Exception as e:
