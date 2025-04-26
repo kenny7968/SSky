@@ -44,9 +44,12 @@ class MainFrame(wx.Frame):
         # 認証マネージャー
         self.auth_manager = AuthManager()
         
-        # 設定マネージャー
+        # 設定マネージャー（シングルトン）
         from config.settings_manager import SettingsManager
         self.settings_manager = SettingsManager()
+        
+        # タイムラインビューを設定マネージャーのオブザーバーとして登録
+        # （TimelineViewのコンストラクタで自動的に登録されるため不要）
         
         # イベントハンドラ
         self.auth_handlers = AuthHandlers(self, self.client, self.auth_manager)
@@ -175,33 +178,15 @@ class MainFrame(wx.Frame):
             event: メニューイベント
         """
         from gui.dialogs.settings_dialog import SettingsDialog
-        from config.settings_manager import SettingsManager
-        
-        # 設定マネージャーの取得
-        if not hasattr(self, 'settings_manager'):
-            self.settings_manager = SettingsManager()
         
         # 設定ダイアログの表示
-        dialog = SettingsDialog(self, self.settings_manager)
+        dialog = SettingsDialog(self)
         result = dialog.ShowModal()
         
         if result == wx.ID_OK:
-            # 設定が変更された場合の処理
-            # タイムラインの自動更新設定を反映
-            logger = logging.getLogger(__name__)
-            logger.debug("設定ダイアログがOKで閉じられました。設定を反映します。")
-            
-            # タイムラインの自動更新設定を反映
-            if hasattr(self, 'timeline'):
-                auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)
-                fetch_interval = self.settings_manager.get('timeline.fetch_interval', 180)
-                logger.debug(f"タイムラインの自動更新設定: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}")
-                
-                # タイムラインの自動更新設定を反映するメソッドがあれば呼び出す
-                if hasattr(self.timeline, 'set_auto_fetch'):
-                    self.timeline.set_auto_fetch(auto_fetch, fetch_interval)
+            logger.debug("設定ダイアログがOKで閉じられました。")
+            # 設定変更の通知は自動的に行われるため、ここでの処理は不要
         else:
-            logger = logging.getLogger(__name__)
             logger.debug("設定ダイアログがキャンセルで閉じられました。")
         
         dialog.Destroy()

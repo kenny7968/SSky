@@ -57,6 +57,14 @@ class TimelineView(wx.Panel):
         # アクセシビリティ
         self.SetName("タイムラインパネル")
         
+        # 設定マネージャーを取得し、オブザーバーとして登録
+        from config.settings_manager import SettingsManager
+        self.settings_manager = SettingsManager()
+        self.settings_manager.add_observer(self)
+        
+        # 設定から自動取得の設定を読み込む
+        self.load_settings()
+        
     def init_ui(self):
         """UIの初期化"""
         # メインレイアウト
@@ -323,6 +331,24 @@ class TimelineView(wx.Panel):
             event: メニューイベント
         """
         self.list_ctrl.on_open_url(event)
+    
+    def load_settings(self):
+        """設定から自動取得の設定を読み込む"""
+        auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)
+        fetch_interval = self.settings_manager.get('timeline.fetch_interval', 180)
+        logger.debug(f"設定から自動取得の設定を読み込みました: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}")
+        self.set_auto_fetch(auto_fetch, fetch_interval)
+    
+    def on_settings_changed(self, key=None):
+        """設定変更時の処理
+        
+        Args:
+            key (str, optional): 変更された設定キー
+        """
+        # タイムライン関連の設定が変更された場合、または全体の設定が変更された場合
+        if key is None or key.startswith('timeline.'):
+            logger.debug(f"設定変更を検出しました: key={key}")
+            self.load_settings()
     
     def get_selected_post(self):
         """選択中の投稿データを取得

@@ -15,12 +15,11 @@ logger = logging.getLogger(__name__)
 class SettingsDialog(wx.Dialog):
     """設定ダイアログクラス"""
     
-    def __init__(self, parent, settings_manager):
+    def __init__(self, parent):
         """初期化
         
         Args:
             parent: 親ウィンドウ
-            settings_manager: 設定マネージャー
         """
         super().__init__(
             parent,
@@ -29,7 +28,9 @@ class SettingsDialog(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         )
         
-        self.settings_manager = settings_manager
+        # シングルトンの設定マネージャーを取得
+        from config.settings_manager import SettingsManager
+        self.settings_manager = SettingsManager()
         
         # 設定値のキャッシュ
         self.settings_cache = {
