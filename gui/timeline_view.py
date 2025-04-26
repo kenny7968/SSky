@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 # タイマーID
 TIMER_ID = 1000
+TIME_UPDATE_TIMER_ID = 1001
 
 class TimelineView(wx.Panel):
     """タイムラインビュークラス"""
@@ -36,6 +37,7 @@ class TimelineView(wx.Panel):
         
         # タイマー
         self.timer = wx.Timer(self, TIMER_ID)
+        self.time_update_timer = wx.Timer(self, TIME_UPDATE_TIMER_ID)
         
         # UIの初期化
         self.init_ui()
@@ -46,10 +48,22 @@ class TimelineView(wx.Panel):
         
         # イベントバインド
         self.Bind(wx.EVT_TIMER, self.on_timer, id=TIMER_ID)
+        self.Bind(wx.EVT_TIMER, self.on_time_update_timer, id=TIME_UPDATE_TIMER_ID)
         self.Bind(wx.EVT_BUTTON, self.on_fetch_button, self.fetch_button)
+        
+        # 時間表示更新タイマーを開始（1分ごと）
+        self.time_update_timer.Start(60 * 1000)  # 60秒 = 1分
         
         # アクセシビリティ
         self.SetName("タイムラインパネル")
+        
+        # 設定マネージャーを取得し、オブザーバーとして登録
+        from config.settings_manager import SettingsManager
+        self.settings_manager = SettingsManager()
+        self.settings_manager.add_observer(self)
+        
+        # 設定から自動取得の設定を読み込む
+        self.load_settings()
         
     def init_ui(self):
         """UIの初期化"""
@@ -67,12 +81,12 @@ class TimelineView(wx.Panel):
         main_sizer.Add(toolbar_sizer, 0, wx.EXPAND)
         
         # タイトルラベル
-        title_label = wx.StaticText(self, label="ホームタイムライン")
+        self.title_label = wx.StaticText(self, label="ホームタイムライン")
         # フォントを大きくして目立たせる
-        font = title_label.GetFont()
+        font = self.title_label.GetFont()
         font.SetWeight(wx.FONTWEIGHT_BOLD)
-        title_label.SetFont(font)
-        main_sizer.Add(title_label, 0, wx.LEFT | wx.TOP, 10)
+        self.title_label.SetFont(font)
+        main_sizer.Add(self.title_label, 0, wx.LEFT | wx.TOP, 10)
         
         # リストビュー
         self.list_ctrl = TimelineListCtrl(self)
@@ -88,6 +102,35 @@ class TimelineView(wx.Panel):
         """
         logger.debug(f"自動取得タイマー発火: {time.strftime('%H:%M:%S')}")
         self.fetch_timeline()
+    
+    def on_time_update_timer(self, event):
+        """時間表示更新タイマーイベント処理
+        
+        Args:
+            event: タイマーイベント
+        """
+        logger.debug(f"時間表示更新タイマー発火: {time.strftime('%H:%M:%S')}")
+        self.update_post_times()
+    
+    def update_post_times(self):
+        """投稿の時間表示を更新"""
+        if not self.list_ctrl.posts:
+            return
+            
+        # 投稿の時間表示を更新
+        updated = False
+        for i, post in enumerate(self.list_ctrl.posts):
+            # raw_timestampから相対時間を再計算
+            new_time = format_relative_time(post['raw_timestamp'])
+            
+            # 表示が変わった場合のみ更新
+            if new_time != post['time']:
+                post['time'] = new_time
+                self.list_ctrl.SetItem(i, 2, new_time)
+                updated = True
+                
+        if updated:
+            logger.debug("投稿の時間表示を更新しました")
         
     def on_fetch_button(self, event):
         """タイムライン取得ボタンのイベント処理
@@ -122,9 +165,33 @@ class TimelineView(wx.Panel):
         # レイアウトの更新
         self.Layout()
         
+    def update_login_status(self, is_logged_in):
+        """ログイン状態に応じてUIを更新
+        
+        Args:
+            is_logged_in (bool): ログイン状態
+        """
+        if is_logged_in:
+            # ログイン状態
+            self.title_label.SetLabel("ホームタイムライン")
+        else:
+            # 未ログイン状態
+            self.title_label.SetLabel("ホームタイムライン - ログインしていません")
+            
+            # リストをクリア
+            self.list_ctrl.DeleteAllItems()
+            self.list_ctrl.posts = []
+            self.list_ctrl.post_count = 0
+            self.list_ctrl.selected_index = -1
+            
+            # ステータスバーの更新
+            frame = wx.GetTopLevelParent(self)
+            if hasattr(frame, 'statusbar'):
+                frame.statusbar.SetStatusText("ログインしていません")
+    
     def show_not_logged_in_message(self):
         """未ログイン状態のメッセージを表示"""
-        self.list_ctrl.show_not_logged_in_message()
+        self.update_login_status(False)
         
     def fetch_timeline(self, client=None, selected_uri=None):
         """Bluesky APIを使用してタイムラインを取得
@@ -155,8 +222,7 @@ class TimelineView(wx.Panel):
             timeline_data = client.get_timeline(limit=50)
             
             # 投稿データの変換
-            new_posts = []
-            edited_posts = []
+            posts = []
             
             for post in timeline_data.feed:
                 # 投稿データを適切な形式に変換
@@ -208,47 +274,55 @@ class TimelineView(wx.Panel):
                             }
                             logger.debug(f"ルート投稿情報: {root_uri}")
                 
-                # 既存の投稿かどうかをチェック
-                existing_post_index = self.list_ctrl.find_post_by_uri(post_data['uri'])
-                
-                if existing_post_index >= 0:
-                    # 既存の投稿がある場合、内容が変更されているかチェック
-                    existing_post = self.list_ctrl.posts[existing_post_index]
-                    if existing_post['content'] != post_data['content']:
-                        # 内容が変更されている場合は編集された投稿として記録
-                        logger.debug(f"編集された投稿を検出: {post_data['uri']}")
-                        edited_posts.append((existing_post_index, post_data))
-                else:
-                    # 新しい投稿の場合はリストに追加
-                    new_posts.append(post_data)
+                # 投稿をリストに追加
+                posts.append(post_data)
             
-            # 編集された投稿を更新
-            if edited_posts:
-                for index, post_data in edited_posts:
-                    self.list_ctrl.update_post(index, post_data)
-                
-                # 編集された投稿がある旨の警告ダイアログを表示
-                wx.MessageBox(
-                    f"{len(edited_posts)}件の投稿が編集されています。",
-                    "投稿の編集を検出",
-                    wx.OK | wx.ICON_INFORMATION
-                )
+            # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
+            posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
             
-            # 新しい投稿を追加
-            if new_posts:
-                # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
-                new_posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
-                self.list_ctrl.add_posts(new_posts)
-                logger.info(f"新しい投稿を追加しました: {len(new_posts)}件")
+            # リストビューをクリア
+            self.list_ctrl.DeleteAllItems()
+            
+            # 投稿データを更新
+            self.list_ctrl.posts = posts
+            self.list_ctrl.post_count = len(posts)
+            
+            # リストビューに投稿を追加
+            for i, post in enumerate(posts):
+                index = self.list_ctrl.InsertItem(i, post['username'])
+                self.list_ctrl.SetItem(index, 1, post['content'])
+                self.list_ctrl.SetItem(index, 2, post['time'])
+                self.list_ctrl.SetItemData(index, i)
             
             # 以前選択していた投稿と同じURIを持つ投稿を選択
             if selected_uri:
                 self.list_ctrl.select_post_by_uri(selected_uri)
             
-            logger.info(f"タイムラインを取得しました: 新規={len(new_posts)}件, 編集={len(edited_posts)}件")
+            logger.info(f"タイムラインを取得しました: {len(posts)}件")
+            
+            # 再描画を強制
+            wx.CallAfter(self.list_ctrl.Refresh)
             
         except Exception as e:
-            logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
+            # 認証エラーの場合は特別な処理
+            from core.client import AuthenticationError
+            if isinstance(e, AuthenticationError):
+                logger.error(f"認証エラー: {str(e)}")
+                wx.MessageBox(
+                    "セッションが無効になりました。再ログインが必要です。",
+                    "認証エラー",
+                    wx.OK | wx.ICON_ERROR
+                )
+                
+                # 親フレームのログインダイアログを表示
+                frame = wx.GetTopLevelParent(self)
+                if hasattr(frame, 'auth_handlers') and hasattr(frame.auth_handlers, 'on_login'):
+                    wx.CallAfter(frame.auth_handlers.on_login, None)
+                    
+                # 未ログイン状態のメッセージを表示
+                self.show_not_logged_in_message()
+            else:
+                logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
     
     def on_open_url(self, event):
         """URLを開くアクション
@@ -257,6 +331,24 @@ class TimelineView(wx.Panel):
             event: メニューイベント
         """
         self.list_ctrl.on_open_url(event)
+    
+    def load_settings(self):
+        """設定から自動取得の設定を読み込む"""
+        auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)
+        fetch_interval = self.settings_manager.get('timeline.fetch_interval', 180)
+        logger.debug(f"設定から自動取得の設定を読み込みました: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}")
+        self.set_auto_fetch(auto_fetch, fetch_interval)
+    
+    def on_settings_changed(self, key=None):
+        """設定変更時の処理
+        
+        Args:
+            key (str, optional): 変更された設定キー
+        """
+        # タイムライン関連の設定が変更された場合、または全体の設定が変更された場合
+        if key is None or key.startswith('timeline.'):
+            logger.debug(f"設定変更を検出しました: key={key}")
+            self.load_settings()
     
     def get_selected_post(self):
         """選択中の投稿データを取得
@@ -578,136 +670,7 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             if hasattr(frame, 'on_delete'):
                 frame.on_delete(event)
     
-    def show_not_logged_in_message(self):
-        """未ログイン状態のメッセージを表示"""
-        # リストをクリア
-        self.DeleteAllItems()
-        self.posts = []
-        self.post_count = 0
-        self.selected_index = -1
-        
-        # 「ログインしていません」というアイテムを追加
-        index = self.InsertItem(0, "")
-        self.SetItem(index, 1, "ログインしていません")
-        self.SetItem(index, 2, "")
-        
-        # ステータスバーの更新
-        frame = wx.GetTopLevelParent(self)
-        if hasattr(frame, 'statusbar'):
-            frame.statusbar.SetStatusText("ログインしていません")
     
-    def fetch_timeline(self, client=None, selected_uri=None):
-        """Bluesky APIを使用してタイムラインを取得
-        
-        Args:
-            client (BlueskyClient, optional): Blueskyクライアント
-            selected_uri (str, optional): 選択する投稿のURI
-        """
-        # 現在選択されている投稿のURIを記憶（引数で指定されていない場合）
-        if selected_uri is None and self.selected_index != -1 and self.selected_index < len(self.posts):
-            selected_uri = self.posts[self.selected_index].get('uri')
-            logger.info(f"現在選択されている投稿のURI: {selected_uri}")
-        
-        # クライアントが渡されなかった場合は親フレームから取得
-        if not client:
-            frame = wx.GetTopLevelParent(self)
-            if hasattr(frame, 'client'):
-                client = frame.client
-        
-        # クライアントがない場合は未ログイン状態のメッセージを表示
-        if not client or not client.is_logged_in:
-            logger.warning("タイムラインの取得に失敗しました: クライアントが設定されていません")
-            self.show_not_logged_in_message()
-            return
-            
-        try:
-            # タイムラインの取得（最新50件）
-            logger.info("タイムラインを取得しています...")
-            timeline_data = client.get_timeline(limit=50)
-            
-            # 投稿データの変換と格納
-            self.posts = []
-            
-            for post in timeline_data.feed:
-                # 投稿情報のログ出力は削除
-                
-                # 投稿データを適切な形式に変換
-                post_data = {
-                    'username': post.post.author.display_name or post.post.author.handle,
-                    'handle': f"@{post.post.author.handle}",
-                    'author_handle': post.post.author.handle,  # 投稿者のハンドル（@なし）
-                    'content': post.post.record.text,
-                    'time': format_relative_time(post.post.indexed_at),  # 表示用の文字列
-                    'raw_timestamp': post.post.indexed_at,  # ソート用のオリジナルタイムスタンプ
-                    'likes': getattr(post.post, 'like_count', 0),
-                    'replies': getattr(post.post, 'reply_count', 0),
-                    'reposts': getattr(post.post, 'repost_count', 0),
-                    'uri': getattr(post.post, 'uri', None),  # 投稿のURI（削除に必要）
-                    'cid': getattr(post.post, 'cid', None),  # 投稿のCID（削除に必要）
-                    'is_own_post': post.post.author.handle == client.profile.handle,  # 自分の投稿かどうか
-                    # スレッド情報を追加
-                    'reply_parent': None,
-                    'reply_root': None,
-                    # facets情報を追加（URLなどの特殊要素の情報）
-                    'facets': getattr(post.post.record, 'facets', None)
-                }
-                
-                # スレッド情報を取得（返信の場合）
-                if hasattr(post.post.record, 'reply') and post.post.record.reply:
-                    logger.debug(f"返信投稿を検出: {post.post.uri}")
-                    
-                    # 親投稿の情報
-                    if hasattr(post.post.record.reply, 'parent'):
-                        parent_uri = getattr(post.post.record.reply.parent, 'uri', None)
-                        parent_cid = getattr(post.post.record.reply.parent, 'cid', None)
-                        
-                        if parent_uri and parent_cid:
-                            post_data['reply_parent'] = {
-                                'uri': parent_uri,
-                                'cid': parent_cid
-                            }
-                            logger.debug(f"親投稿情報: {parent_uri}")
-                    
-                    # ルート投稿の情報
-                    if hasattr(post.post.record.reply, 'root'):
-                        root_uri = getattr(post.post.record.reply.root, 'uri', None)
-                        root_cid = getattr(post.post.record.reply.root, 'cid', None)
-                        
-                        if root_uri and root_cid:
-                            post_data['reply_root'] = {
-                                'uri': root_uri,
-                                'cid': root_cid
-                            }
-                            logger.debug(f"ルート投稿情報: {root_uri}")
-                    
-                    # デバッグ出力
-                    logger.debug(f"スレッド情報: parent={post_data.get('reply_parent') is not None}, root={post_data.get('reply_root') is not None}")
-                self.posts.append(post_data)
-                
-            # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
-            self.posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
-            self.post_count = len(self.posts)
-            
-            # UIの更新
-            self.DeleteAllItems()
-            self.init_ui()
-            
-            # 以前選択していた投稿と同じURIを持つ投稿を選択
-            if selected_uri:
-                for i, post in enumerate(self.posts):
-                    if post.get('uri') == selected_uri:
-                        logger.info(f"以前選択していた投稿を再選択: index={i}, uri={selected_uri}")
-                        self.Select(i)
-                        self.Focus(i)
-                        self.selected_index = i
-                        # 選択した項目が表示されるようにスクロール
-                        self.EnsureVisible(i)
-                        break
-            
-            logger.info(f"タイムラインを取得しました: {len(self.posts)}件")
-            
-        except Exception as e:
-            logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
     
     def on_open_url(self, event):
         """URLを開くアクション

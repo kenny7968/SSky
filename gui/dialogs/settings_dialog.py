@@ -15,12 +15,11 @@ logger = logging.getLogger(__name__)
 class SettingsDialog(wx.Dialog):
     """設定ダイアログクラス"""
     
-    def __init__(self, parent, settings_manager):
+    def __init__(self, parent):
         """初期化
         
         Args:
             parent: 親ウィンドウ
-            settings_manager: 設定マネージャー
         """
         super().__init__(
             parent,
@@ -29,16 +28,21 @@ class SettingsDialog(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         )
         
-        self.settings_manager = settings_manager
+        # シングルトンの設定マネージャーを取得
+        from config.settings_manager import SettingsManager
+        self.settings_manager = SettingsManager()
         
         # 設定値のキャッシュ
         self.settings_cache = {
             'timeline': {
                 'auto_fetch': self.settings_manager.get('timeline.auto_fetch', True),
-                'fetch_interval': self.settings_manager.get('timeline.fetch_interval', 180)
+                'fetch_interval': self.settings_manager.get('timeline.fetch_interval', 600)
             },
             'post': {
                 'show_completion_dialog': self.settings_manager.get('post.show_completion_dialog', True)
+            },
+            'advanced': {
+                'enable_debug_log': self.settings_manager.get('advanced.enable_debug_log', False)
             }
         }
         
@@ -81,6 +85,7 @@ class SettingsDialog(wx.Dialog):
         root = self.tree.AddRoot("設定")
         timeline_item = self.tree.AppendItem(root, "投稿一覧")
         post_item = self.tree.AppendItem(root, "投稿")
+        advanced_item = self.tree.AppendItem(root, "高度な設定")
         
         # 最初のカテゴリを選択
         self.tree.SelectItem(timeline_item)
@@ -128,6 +133,60 @@ class SettingsDialog(wx.Dialog):
             self.show_timeline_settings()
         elif text == "投稿":
             self.show_post_settings()
+        elif text == "高度な設定":
+            self.show_advanced_settings()
+            
+    def show_advanced_settings(self):
+        """高度な設定項目を表示"""
+        # 現在の設定パネルの子ウィジェットをクリア
+        for child in self.settings_panel.GetChildren():
+            child.Destroy()
+        
+        # 設定項目の作成
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # デバッグログの設定
+        self.enable_debug_log_cb = wx.CheckBox(
+            self.settings_panel,
+            label="デバッグログを有効にする（再起動後に反映）"
+        )
+        sizer.Add(self.enable_debug_log_cb, 0, wx.ALL, 10)
+        
+        # 説明文（リードオンリーのテキストボックス）
+        description = wx.TextCtrl(
+            self.settings_panel,
+            value="デバッグログを有効にすると、詳細なログが出力されます。\n"
+                  "問題が発生した場合に開発者に報告する際に役立ちます。\n"
+                  "この設定は再起動後に反映されます。",
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_NO_VSCROLL
+        )
+        # テキストボックスのサイズを適切に設定
+        description.SetMinSize((-1, 60))
+        sizer.Add(description, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        
+        self.settings_panel.SetSizer(sizer)
+        
+        # 設定値の読み込み（キャッシュから）
+        self.enable_debug_log_cb.SetValue(
+            self.settings_cache['advanced']['enable_debug_log']
+        )
+        
+        # イベントハンドラをバインド
+        self.enable_debug_log_cb.Bind(wx.EVT_CHECKBOX, self.on_debug_log_changed)
+        
+        self.settings_panel.Layout()
+    
+    def on_debug_log_changed(self, event):
+        """デバッグログの有効/無効が変更されたときの処理
+        
+        Args:
+            event: チェックボックスイベント
+        """
+        enabled = self.enable_debug_log_cb.GetValue()
+        
+        # キャッシュに値を保存
+        self.settings_cache['advanced']['enable_debug_log'] = enabled
+        logger.debug(f"デバッグログの有効/無効を変更しました: {enabled}")
     
     def show_timeline_settings(self):
         """投稿一覧の設定項目を表示"""
@@ -149,7 +208,7 @@ class SettingsDialog(wx.Dialog):
             self.settings_panel,
             min=180,
             max=3600,
-            initial=180
+            initial=600
         )
         
         interval_sizer.Add(interval_label, 0, wx.ALIGN_CENTER_VERTICAL)
@@ -257,6 +316,8 @@ class SettingsDialog(wx.Dialog):
                 self.show_timeline_settings()
             elif text == "投稿":
                 self.show_post_settings()
+            elif text == "高度な設定":
+                self.show_advanced_settings()
     
     def on_ok(self, event):
         """OKボタンがクリックされたときの処理
@@ -293,9 +354,11 @@ class SettingsDialog(wx.Dialog):
             auto_fetch = self.settings_cache['timeline']['auto_fetch']
             fetch_interval = self.settings_cache['timeline']['fetch_interval']
             show_completion_dialog = self.settings_cache['post']['show_completion_dialog']
+            enable_debug_log = self.settings_cache['advanced']['enable_debug_log']
             
             # 設定値の詳細をログに出力
-            logger.debug(f"保存する設定値: timeline.auto_fetch={auto_fetch}, timeline.fetch_interval={fetch_interval}, post.show_completion_dialog={show_completion_dialog}")
+            logger.debug(f"保存する設定値: timeline.auto_fetch={auto_fetch}, timeline.fetch_interval={fetch_interval}, "
+                         f"post.show_completion_dialog={show_completion_dialog}, advanced.enable_debug_log={enable_debug_log}")
             
             # バリデーション
             if fetch_interval < 180:
@@ -308,6 +371,7 @@ class SettingsDialog(wx.Dialog):
             self.settings_manager.set('timeline.auto_fetch', auto_fetch)
             self.settings_manager.set('timeline.fetch_interval', fetch_interval)
             self.settings_manager.set('post.show_completion_dialog', show_completion_dialog)
+            self.settings_manager.set('advanced.enable_debug_log', enable_debug_log)
             
             # 設定ファイルに保存
             logger.debug(f"設定の保存を試みます: {self.settings_manager.settings_file}")
@@ -324,12 +388,6 @@ class SettingsDialog(wx.Dialog):
                 )
             else:
                 logger.debug("設定の保存に成功しました")
-                # 成功メッセージを表示
-                wx.MessageBox(
-                    "設定を保存しました。",
-                    "保存完了",
-                    wx.OK | wx.ICON_INFORMATION
-                )
             
             return success
         except Exception as e:

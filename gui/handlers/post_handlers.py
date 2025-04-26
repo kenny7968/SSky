@@ -374,8 +374,8 @@ class PostHandlers:
                     logger.info("リポスト後にタイムラインを更新します")
                     self.parent.timeline.fetch_timeline(self.client, selected_uri)
                     
-                    # GUIの更新を強制
-                    wx.CallAfter(self.parent.timeline.Refresh)
+                    # 重複した再描画を削除（fetch_timeline内で再描画するため）
+                    # wx.CallAfter(self.parent.timeline.Refresh)
                 
                 dlg.Destroy()
                 return True

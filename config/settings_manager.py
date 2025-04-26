@@ -15,10 +15,23 @@ from utils.file_utils import ensure_directory_exists
 logger = logging.getLogger(__name__)
 
 class SettingsManager:
-    """設定管理クラス"""
+    """設定管理クラス（シングルトン）"""
+    
+    _instance = None
+    _observers = []  # 設定変更の通知先リスト
+    
+    def __new__(cls):
+        """シングルトンパターンの実装"""
+        if cls._instance is None:
+            cls._instance = super(SettingsManager, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
     
     def __init__(self):
-        """初期化"""
+        """初期化（一度だけ実行）"""
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+        self._initialized = True
         # settingsフォルダにconfig.jsonを配置
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         settings_dir = os.path.join(base_dir, 'settings')
@@ -32,10 +45,13 @@ class SettingsManager:
         self.default_settings = {
             "timeline": {
                 "auto_fetch": True,        # 投稿一覧を自動取得する
-                "fetch_interval": 180      # 自動取得の間隔（秒）
+                "fetch_interval": 600      # 自動取得の間隔（秒）
             },
             "post": {
                 "show_completion_dialog": True  # 投稿・返信・引用時に完了ダイアログを表示
+            },
+            "advanced": {
+                "enable_debug_log": False  # デバッグログを有効にする
             }
         }
         
@@ -70,8 +86,42 @@ class SettingsManager:
         except Exception as e:
             logger.error(f"設定ファイルの読み込みに失敗しました: {str(e)}")
     
+    def add_observer(self, observer):
+        """設定変更の通知先を追加
+        
+        Args:
+            observer: 通知先オブジェクト（on_settings_changedメソッドを持つ）
+        """
+        if observer not in self._observers:
+            self._observers.append(observer)
+            logger.debug(f"設定変更の通知先を追加しました: {observer}")
+
+    def remove_observer(self, observer):
+        """設定変更の通知先を削除
+        
+        Args:
+            observer: 通知先オブジェクト
+        """
+        if observer in self._observers:
+            self._observers.remove(observer)
+            logger.debug(f"設定変更の通知先を削除しました: {observer}")
+
+    def notify_observers(self, key=None):
+        """設定変更を通知
+        
+        Args:
+            key (str, optional): 変更された設定キー。Noneの場合は全体の変更を通知
+        """
+        for observer in self._observers:
+            if hasattr(observer, 'on_settings_changed'):
+                try:
+                    observer.on_settings_changed(key)
+                    logger.debug(f"設定変更を通知しました: observer={observer}, key={key}")
+                except Exception as e:
+                    logger.error(f"設定変更の通知中にエラーが発生しました: {str(e)}")
+    
     def save(self):
-        """現在の設定をファイルに保存する"""
+        """現在の設定をファイルに保存する（変更通知付き）"""
         try:
             # 設定ファイルのディレクトリを確認
             settings_dir = os.path.dirname(self.settings_file)
@@ -87,6 +137,10 @@ class SettingsManager:
             with open(self.settings_file, 'w', encoding='utf-8') as f:
                 json.dump(self.settings, f, ensure_ascii=False, indent=4)
             logger.debug(f"設定ファイルを保存しました: {self.settings_file}")
+            
+            # 設定変更を通知（全体の変更として通知）
+            self.notify_observers()
+            
             return True
         except PermissionError as e:
             logger.error(f"設定ファイルへのアクセス権限がありません: {str(e)}")
@@ -129,7 +183,7 @@ class SettingsManager:
             return self.settings.get(key, default)
     
     def set(self, key, value):
-        """設定値を設定する
+        """設定値を設定する（変更通知付き）
         
         Args:
             key (str): 設定キー
@@ -139,6 +193,13 @@ class SettingsManager:
             bool: 成功した場合はTrue
         """
         try:
+            # 現在の値を取得
+            old_value = self.get(key)
+            
+            # 値が変更されない場合は何もしない
+            if old_value == value:
+                return True
+                
             # ネストされたキーに対応（例: 'timeline.auto_fetch'）
             if '.' in key:
                 parts = key.split('.')
@@ -150,6 +211,10 @@ class SettingsManager:
                 settings[parts[-1]] = value
             else:
                 self.settings[key] = value
+                
+            # 設定変更を通知
+            self.notify_observers(key)
+            
             return True
         except Exception as e:
             logger.error(f"設定の更新に失敗しました: {str(e)}")

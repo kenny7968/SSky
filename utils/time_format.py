@@ -7,10 +7,37 @@ SSky - Blueskyクライアント
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
+
+def format_timestamp_to_jst(timestamp):
+    """UTCタイムスタンプを日本時間（JST）の 'yyyy/mm/dd hh:mm' 形式に変換
+    
+    Args:
+        timestamp: ISO形式の文字列またはdatetimeオブジェクト
+        
+    Returns:
+        str: 'yyyy/mm/dd hh:mm' 形式の日本時間文字列
+    """
+    try:
+        # タイムスタンプがUTC時間の場合
+        if isinstance(timestamp, str):
+            dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+        else:
+            dt = timestamp
+        
+        # UTCから日本時間（JST, UTC+9）に変換
+        jst = dt.astimezone(timezone(timedelta(hours=9)))
+        
+        # 指定された形式に変換
+        formatted_time = jst.strftime('%Y/%m/%d %H:%M')
+        
+        return formatted_time
+    except Exception as e:
+        logger.error(f"時間フォーマットに失敗しました: {str(e)}")
+        return "不明"
 
 def format_relative_time(timestamp):
     """タイムスタンプを表示用の相対時間文字列に変換
@@ -29,6 +56,7 @@ def format_relative_time(timestamp):
             dt = timestamp
         
         # 現在時刻との差を計算
+        # 推奨される方法でUTC時間を取得
         now = datetime.now(timezone.utc)
         diff = now - dt
         

@@ -23,7 +23,7 @@ class LoginDialog(wx.Dialog):
         """
         super(LoginDialog, self).__init__(
             parent, 
-            title="ログイン情報の設定", 
+            title="Blueskyにログイン", 
             size=(400, 200),
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         )
@@ -54,7 +54,7 @@ class LoginDialog(wx.Dialog):
         
         # ボタン
         button_sizer = wx.StdDialogButtonSizer()
-        ok_button = wx.Button(panel, wx.ID_OK, "保存")
+        ok_button = wx.Button(panel, wx.ID_OK, "ログイン")
         cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
         button_sizer.AddButton(ok_button)
         button_sizer.AddButton(cancel_button)

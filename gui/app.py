@@ -22,7 +22,7 @@ class SSkyApp(wx.App):
         # 設定の読み込み
         self.config = AppConfig()
         
-        # 設定マネージャーの初期化
+        # 設定マネージャーの初期化（シングルトン）
         from config.settings_manager import SettingsManager
         self.settings_manager = SettingsManager()
         
@@ -40,9 +40,6 @@ class SSkyApp(wx.App):
             title=self.config.get('app_name', 'SSky'),
             size=(width, height)
         )
-        
-        # 設定マネージャーをメインフレームに渡す
-        self.frame.settings_manager = self.settings_manager
         
         # フレームの表示
         self.frame.Show()

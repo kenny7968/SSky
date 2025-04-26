@@ -31,7 +31,7 @@ class AuthHandlers:
         self.auth_manager = auth_manager if auth_manager else AuthManager()
         
     def on_login(self, event):
-        """ログイン情報設定ダイアログを表示
+        """ログインダイアログを表示
         
         Args:
             event: メニューイベント
@@ -44,12 +44,15 @@ class AuthHandlers:
             username, password = dlg.get_credentials()
             
             if username and password:
-                # ログイン情報を保存
-                if self.auth_manager.save_credentials(username, password):
-                    # ログイン処理を実行
-                    self.perform_login(username, password)
-                else:
-                    wx.MessageBox("ログイン情報の保存に失敗しました", "エラー", wx.OK | wx.ICON_ERROR)
+                # 直接ログイン処理を実行
+                if self.perform_login(username, password):
+                    # ログイン成功後、セッション情報を保存
+                    session_string = self.client.export_session_string()
+                    if session_string:
+                        # セッション情報を暗号化せずにそのまま保存（実験用）
+                        self.auth_manager.save_session(self.client.user_did, session_string)
+                        logger.info(f"セッション情報を暗号化せずに保存しました: {self.client.user_did}")
+                # エラーメッセージは perform_login 内で表示されるので、ここでは何もしない
             else:
                 wx.MessageBox("ユーザー名とアプリパスワードを入力してください", "エラー", wx.OK | wx.ICON_ERROR)
         
@@ -71,7 +74,8 @@ class AuthHandlers:
             if hasattr(self.parent, 'statusbar'):
                 self.parent.statusbar.SetStatusText("Blueskyにログイン中...")
             
-            logger.debug(f"ログイン試行: ユーザー名={username}")
+            # ユーザー名はログに出力しない（セキュリティ上の理由から）
+            logger.debug("ログイン試行を開始します")
             
             try:
                 # ログイン試行
@@ -88,6 +92,10 @@ class AuthHandlers:
                 
                 if hasattr(self.parent, 'update_login_status'):
                     self.parent.update_login_status(True)
+                
+                # タイムラインビューのログイン状態を更新
+                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                    self.parent.timeline.update_login_status(True)
                 
                 # タイムラインの更新
                 if hasattr(self.parent, 'statusbar'):
@@ -120,7 +128,9 @@ class AuthHandlers:
                     self.parent.statusbar.SetStatusText("ログインに失敗しました")
                 
                 # 未ログイン状態のメッセージを表示
-                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                    self.parent.timeline.update_login_status(False)
+                elif hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
                     self.parent.timeline.show_not_logged_in_message()
                 
                 return False
@@ -139,7 +149,9 @@ class AuthHandlers:
                 self.parent.statusbar.SetStatusText("ログインに失敗しました")
             
             # 未ログイン状態のメッセージを表示
-            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                self.parent.timeline.update_login_status(False)
+            elif hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
                 self.parent.timeline.show_not_logged_in_message()
             
             return False
@@ -156,8 +168,9 @@ class AuthHandlers:
         if self.client and hasattr(self.client, 'profile') and self.client.profile:
             username = self.client.profile.handle
             
-            # ログイン情報を削除
-            self.auth_manager.delete_credentials()
+            # セッション情報を削除
+            if self.client.user_did:
+                self.auth_manager.delete_session(self.client.user_did)
             
             # クライアントをリセット
             self.client.logout()
@@ -173,7 +186,9 @@ class AuthHandlers:
                 self.parent.update_login_status(False)
                 
             # タイムラインビューを更新（「ログインしていません」表示）
-            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                self.parent.timeline.update_login_status(False)
+            elif hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
                 self.parent.timeline.show_not_logged_in_message()
             
             logger.info("ログアウトしました")
@@ -185,28 +200,139 @@ class AuthHandlers:
         
         return False
         
-    def load_saved_session(self):
-        """保存されたログイン情報を読み込み、ログイン処理を実行
+    def login_with_session(self, session_string, user_did=None):
+        """セッション情報を使用してログイン処理を実行
+        
+        Args:
+            session_string (str): セッション情報の文字列
+            user_did (str, optional): ユーザーのDID
+            
+        Returns:
+            bool: 成功した場合はTrue
+        """
+        try:
+            # ステータスバーの更新
+            if hasattr(self.parent, 'statusbar'):
+                self.parent.statusbar.SetStatusText("セッション情報を使用してログイン中...")
+            
+            logger.debug("セッション情報を使用してログイン試行")
+            
+            try:
+                # セッションでログイン
+                profile = self.client.login_with_session(session_string)
+                
+                logger.debug(f"セッションを使用したログイン成功: プロフィール={profile.display_name}")
+                
+                # ログイン成功
+                if hasattr(self.parent, 'set_username'):
+                    self.parent.set_username(profile.handle)
+                
+                if hasattr(self.parent, 'statusbar'):
+                    self.parent.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+                
+                if hasattr(self.parent, 'update_login_status'):
+                    self.parent.update_login_status(True)
+                
+                # タイムラインビューのログイン状態を更新
+                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                    self.parent.timeline.update_login_status(True)
+                
+                # タイムラインの更新
+                if hasattr(self.parent, 'statusbar'):
+                    self.parent.statusbar.SetStatusText("タイムラインを更新しています...")
+                
+                if hasattr(self.parent, 'timeline'):
+                    self.parent.timeline.fetch_timeline(self.client)
+                    
+                    if hasattr(self.parent, 'statusbar'):
+                        self.parent.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+                
+                return True
+                
+            except Exception as e:
+                # セッションが無効な場合
+                logger.error(f"セッションを使用したログインに失敗しました: {str(e)}")
+                
+                # セッション情報が無効な場合は削除
+                if user_did:
+                    self.auth_manager.delete_session(user_did)
+                
+                # 未ログイン状態のメッセージを表示
+                if hasattr(self.parent, 'statusbar'):
+                    self.parent.statusbar.SetStatusText("セッションが無効です。再ログインが必要です。")
+                
+                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                    self.parent.timeline.update_login_status(False)
+                elif hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                    self.parent.timeline.show_not_logged_in_message()
+                
+                return False
+            
+        except Exception as e:
+            # その他のエラー
+            logger.error(f"セッションを使用したログイン処理中に例外が発生しました: {str(e)}", exc_info=True)
+            
+            # 未ログイン状態のメッセージを表示
+            if hasattr(self.parent, 'statusbar'):
+                self.parent.statusbar.SetStatusText("ログインに失敗しました")
+            
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                self.parent.timeline.update_login_status(False)
+            elif hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                self.parent.timeline.show_not_logged_in_message()
+            
+            return False
+    
+    def load_session(self):
+        """保存されたセッション情報を読み込み、ログイン処理を実行
         
         Returns:
             bool: 成功した場合はTrue
         """
         try:
-            # ログイン情報を読み込み
-            username, password = self.auth_manager.load_credentials()
-            if username and password:
-                logger.info(f"保存されたログイン情報を読み込みました: {username}")
-                # ログイン処理を実行
-                return self.perform_login(username, password, show_dialog=False)
-            else:
-                logger.debug("保存されたログイン情報がありません")
-                # 未ログイン状態のメッセージを表示
-                if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
-                    self.parent.timeline.show_not_logged_in_message()
-                return False
-        except Exception as e:
-            logger.error(f"ログイン情報の読み込みに失敗しました: {str(e)}")
+            # セッション情報を読み込み
+            session_string, user_did = self.auth_manager.load_session()
+            if session_string:
+                logger.info(f"保存されたセッション情報を読み込みました: {user_did}")
+                
+                # セッション情報がバイト列の場合はLatin-1でデコード
+                if isinstance(session_string, bytes):
+                    try:
+                        decoded_session = session_string.decode('latin-1')
+                        logger.debug(f"セッション情報をLatin-1でデコードしました: 長さ{len(decoded_session)}文字")
+                        session_string = decoded_session
+                    except Exception as e:
+                        logger.error(f"セッション情報のデコードに失敗しました: {str(e)}")
+                        # デコードに失敗した場合は、そのまま使用
+                
+                # セッションでログイン
+                return self.login_with_session(session_string, user_did)
+            
+            # セッション情報がない場合は、ログインしない状態を維持
+            logger.debug("セッション情報が見つかりませんでした。ログインしていない状態を維持します。")
+            
             # 未ログイン状態のメッセージを表示
-            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                self.parent.timeline.update_login_status(False)
+            elif hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
                 self.parent.timeline.show_not_logged_in_message()
+                
+            # 親フレームのログイン状態も更新
+            if hasattr(self.parent, 'update_login_status'):
+                self.parent.update_login_status(False)
+                
+            return False
+            
+        except Exception as e:
+            logger.error(f"セッション情報の読み込みに失敗しました: {str(e)}")
+            # 未ログイン状態のメッセージを表示
+            if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'update_login_status'):
+                self.parent.timeline.update_login_status(False)
+            elif hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'show_not_logged_in_message'):
+                self.parent.timeline.show_not_logged_in_message()
+                
+            # 親フレームのログイン状態も更新
+            if hasattr(self.parent, 'update_login_status'):
+                self.parent.update_login_status(False)
+                
             return False

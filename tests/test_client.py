@@ -212,6 +212,63 @@ class TestBlueskyClient(unittest.TestCase):
         
         # 検証
         self.assertEqual(str(context.exception), "リポストにはログインが必要です")
+        
+    def test_export_session_string_success(self):
+        """セッション情報のエクスポート成功のテスト"""
+        # モックの設定
+        self.client.client.export_session_string = MagicMock(return_value="test_session_string")
+        
+        # テスト実行
+        result = self.client.export_session_string()
+        
+        # 検証
+        self.client.client.export_session_string.assert_called_once()
+        self.assertEqual(result, "test_session_string")
+        
+    def test_export_session_string_not_logged_in(self):
+        """未ログイン状態でのセッション情報エクスポートテスト"""
+        # ログイン状態を変更
+        self.client.is_logged_in = False
+        
+        # テスト実行
+        result = self.client.export_session_string()
+        
+        # 検証
+        self.assertIsNone(result)
+        
+        
+    def test_login_with_session_success(self):
+        """セッション情報を使用したログイン成功のテスト"""
+        # モックの設定
+        self.client.is_logged_in = False
+        self.client.client = MagicMock()
+        self.client.client.login.return_value = MagicMock(handle="test_handle")
+        self.client.client.me = MagicMock(did="test_did")
+        
+        # テスト実行
+        result = self.client.login_with_session("test_session_string")
+        
+        # 検証
+        self.client.client.login.assert_called_once_with(session_string="test_session_string")
+        self.assertTrue(self.client.is_logged_in)
+        self.assertEqual(result.handle, "test_handle")
+        self.assertEqual(self.client.user_did, "test_did")
+        
+    def test_login_with_session_failure(self):
+        """セッション情報を使用したログイン失敗のテスト"""
+        # モックの設定
+        self.client.is_logged_in = False
+        self.client.client = MagicMock()
+        self.client.client.login.side_effect = Exception("Login failed")
+        
+        # テスト実行
+        with self.assertRaises(Exception) as context:
+            self.client.login_with_session("test_session_string")
+        
+        # 検証
+        self.assertEqual(str(context.exception), "セッションが無効になりました。再ログインが必要です。")
+        self.assertFalse(self.client.is_logged_in)
+        self.assertIsNone(self.client.profile)
 
 if __name__ == '__main__':
     unittest.main()
