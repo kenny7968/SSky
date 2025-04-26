@@ -34,6 +34,7 @@ class TimelineView(wx.Panel):
         # 自動取得の設定
         self.auto_fetch_enabled = False
         self.fetch_interval = 180  # デフォルト：180秒
+        self.fetch_count = 50      # デフォルト：50件
         
         # タイマー
         self.timer = wx.Timer(self, TIMER_ID)
@@ -217,9 +218,9 @@ class TimelineView(wx.Panel):
             return
             
         try:
-            # タイムラインの取得（最新50件）
-            logger.info("タイムラインを取得しています...")
-            timeline_data = client.get_timeline(limit=50)
+            # タイムラインの取得
+            logger.info(f"タイムラインを取得しています... (最大{self.fetch_count}件)")
+            timeline_data = client.get_timeline(limit=self.fetch_count)
             
             # 新しく取得した投稿のURIセットを作成（高速検索用）
             new_post_uris = set()
@@ -386,8 +387,10 @@ class TimelineView(wx.Panel):
         """設定から自動取得の設定を読み込む"""
         auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)
         fetch_interval = self.settings_manager.get('timeline.fetch_interval', 180)
-        logger.debug(f"設定から自動取得の設定を読み込みました: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}")
+        fetch_count = self.settings_manager.get('timeline.fetch_count', 50)
+        logger.debug(f"設定から自動取得の設定を読み込みました: auto_fetch={auto_fetch}, fetch_interval={fetch_interval}, fetch_count={fetch_count}")
         self.set_auto_fetch(auto_fetch, fetch_interval)
+        self.fetch_count = fetch_count
     
     def on_settings_changed(self, key=None):
         """設定変更時の処理
