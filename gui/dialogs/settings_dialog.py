@@ -36,7 +36,7 @@ class SettingsDialog(wx.Dialog):
         self.settings_cache = {
             'timeline': {
                 'auto_fetch': self.settings_manager.get('timeline.auto_fetch', True),
-                'fetch_interval': self.settings_manager.get('timeline.fetch_interval', 180)
+                'fetch_interval': self.settings_manager.get('timeline.fetch_interval', 600)
             },
             'post': {
                 'show_completion_dialog': self.settings_manager.get('post.show_completion_dialog', True)
@@ -208,7 +208,7 @@ class SettingsDialog(wx.Dialog):
             self.settings_panel,
             min=180,
             max=3600,
-            initial=180
+            initial=600
         )
         
         interval_sizer.Add(interval_label, 0, wx.ALIGN_CENTER_VERTICAL)

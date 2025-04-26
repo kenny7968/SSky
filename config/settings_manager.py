@@ -45,7 +45,7 @@ class SettingsManager:
         self.default_settings = {
             "timeline": {
                 "auto_fetch": True,        # 投稿一覧を自動取得する
-                "fetch_interval": 180      # 自動取得の間隔（秒）
+                "fetch_interval": 600      # 自動取得の間隔（秒）
             },
             "post": {
                 "show_completion_dialog": True  # 投稿・返信・引用時に完了ダイアログを表示
