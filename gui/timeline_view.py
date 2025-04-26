@@ -246,8 +246,92 @@ class TimelineView(wx.Panel):
                     'reply_parent': None,
                     'reply_root': None,
                     # facets情報を追加（URLなどの特殊要素の情報）
-                    'facets': getattr(post.post.record, 'facets', None)
+                    'facets': getattr(post.post.record, 'facets', None),
+                    # 引用ポスト情報を初期化
+                    'quote_of': None,
+                    'is_quote_post': False
                 }
+                
+                # embedフィールドの確認（引用ポストかどうか）
+                from atproto import models
+                if hasattr(post.post, 'embed'):
+                    embed = post.post.embed
+                    
+                    # 引用ポストの場合
+                    if isinstance(embed, models.AppBskyEmbedRecord.View):
+                        logger.debug(f"引用ポストを検出: {post.post.uri}")
+                        
+                        # 引用元レコードの情報を取得
+                        if hasattr(embed, 'record'):
+                            quoted_record = embed.record
+                            
+                            # ViewRecordの場合（通常のケース）
+                            if isinstance(quoted_record, models.AppBskyEmbedRecord.ViewRecord):
+                                quoted_author = quoted_record.author
+                                quoted_text = getattr(quoted_record.value, 'text', '[引用元テキストなし]')
+                                
+                                # 引用元情報を設定
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': quoted_author.display_name or quoted_author.handle,
+                                    'handle': f"@{quoted_author.handle}",
+                                    'content': quoted_text,
+                                    'uri': getattr(quoted_record, 'uri', None),
+                                    'cid': getattr(quoted_record, 'cid', None),
+                                    'like_count': getattr(quoted_record, 'like_count', 0),
+                                    'repost_count': getattr(quoted_record, 'repost_count', 0)
+                                }
+                                logger.debug(f"引用元情報: {quoted_author.handle} - {quoted_text[:30]}...")
+                            
+                            # 引用元が見つからない場合
+                            elif isinstance(quoted_record, models.AppBskyEmbedRecord.ViewNotFound):
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': '不明',
+                                    'handle': '@unknown',
+                                    'content': '[引用元投稿が見つかりません]',
+                                    'uri': None,
+                                    'cid': None
+                                }
+                                logger.debug("引用元投稿が見つかりません")
+                            
+                            # 引用元がブロックされている場合
+                            elif isinstance(quoted_record, models.AppBskyEmbedRecord.ViewBlocked):
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': 'ブロック',
+                                    'handle': '@blocked',
+                                    'content': '[引用元投稿はブロックされています]',
+                                    'uri': None,
+                                    'cid': None
+                                }
+                                logger.debug("引用元投稿はブロックされています")
+                    
+                    # 引用ポスト + メディアの場合
+                    elif isinstance(embed, models.AppBskyEmbedRecordWithMedia.View):
+                        logger.debug(f"引用ポスト + メディアを検出: {post.post.uri}")
+                        
+                        # 引用元レコードの情報を取得
+                        if hasattr(embed, 'record') and hasattr(embed.record, 'record'):
+                            quoted_record = embed.record.record
+                            
+                            # ViewRecordの場合（通常のケース）
+                            if isinstance(quoted_record, models.AppBskyEmbedRecord.ViewRecord):
+                                quoted_author = quoted_record.author
+                                quoted_text = getattr(quoted_record.value, 'text', '[引用元テキストなし]')
+                                
+                                # 引用元情報を設定
+                                post_data['is_quote_post'] = True
+                                post_data['quote_of'] = {
+                                    'username': quoted_author.display_name or quoted_author.handle,
+                                    'handle': f"@{quoted_author.handle}",
+                                    'content': quoted_text,
+                                    'uri': getattr(quoted_record, 'uri', None),
+                                    'cid': getattr(quoted_record, 'cid', None),
+                                    'like_count': getattr(quoted_record, 'like_count', 0),
+                                    'repost_count': getattr(quoted_record, 'repost_count', 0)
+                                }
+                                logger.debug(f"引用元情報 (メディア付き): {quoted_author.handle} - {quoted_text[:30]}...")
                 
                 # スレッド情報を取得（返信の場合）
                 if hasattr(post.post.record, 'reply') and post.post.record.reply:
@@ -341,7 +425,15 @@ class TimelineView(wx.Panel):
             # リストビューに投稿を追加
             for i, post in enumerate(temp_posts):
                 index = self.list_ctrl.InsertItem(i, post['username'])
-                self.list_ctrl.SetItem(index, 1, post['content'])
+                
+                # 引用ポストの場合は引用元情報も表示
+                if post.get('is_quote_post', False) and post.get('quote_of'):
+                    quote_info = post['quote_of']
+                    display_content = f"{post['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+                else:
+                    display_content = post['content']
+                
+                self.list_ctrl.SetItem(index, 1, display_content)
                 self.list_ctrl.SetItem(index, 2, post['time'])
                 self.list_ctrl.SetItemData(index, i)
             
@@ -466,7 +558,15 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             
             # リストに追加
             index = self.InsertItem(i, user_text)
-            self.SetItem(index, 1, post['content'])
+            
+            # 引用ポストの場合は引用元情報も表示
+            if post.get('is_quote_post', False) and post.get('quote_of'):
+                quote_info = post['quote_of']
+                display_content = f"{post['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+            else:
+                display_content = post['content']
+                
+            self.SetItem(index, 1, display_content)
             self.SetItem(index, 2, post['time'])
             
             # データを関連付け
@@ -795,9 +895,16 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             # 投稿データを更新
             self.posts[index] = post_data
             
+            # 引用ポストの場合は引用元情報も表示
+            if post_data.get('is_quote_post', False) and post_data.get('quote_of'):
+                quote_info = post_data['quote_of']
+                display_content = f"{post_data['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+            else:
+                display_content = post_data['content']
+            
             # リストビューの表示を更新
             self.SetItem(index, 0, post_data['username'])
-            self.SetItem(index, 1, post_data['content'])
+            self.SetItem(index, 1, display_content)
             self.SetItem(index, 2, post_data['time'])
             
             logger.debug(f"投稿を更新しました: index={index}, uri={post_data.get('uri')}")
@@ -826,7 +933,15 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         # リストビューに追加
         for i, post in enumerate(new_posts, start=current_count):
             index = self.InsertItem(i, post['username'])
-            self.SetItem(index, 1, post['content'])
+            
+            # 引用ポストの場合は引用元情報も表示
+            if post.get('is_quote_post', False) and post.get('quote_of'):
+                quote_info = post['quote_of']
+                display_content = f"{post['content']}\n\n【引用】{quote_info['handle']} - {quote_info['content']}"
+            else:
+                display_content = post['content']
+                
+            self.SetItem(index, 1, display_content)
             self.SetItem(index, 2, post['time'])
             self.SetItemData(index, i)
         

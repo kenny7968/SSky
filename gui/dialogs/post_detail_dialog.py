@@ -132,8 +132,18 @@ class PostDetailDialog(wx.Dialog):
         # 投稿内容（リードオンリーエディット）- 全ての情報を含む
         content_text = f"{self.post_data['username']} {self.post_data['handle']}\n"
         content_text += f"{format_timestamp_to_jst(self.post_data['raw_timestamp'])}\n\n"
-        content_text += f"{self.post_data['content']}\n\n"
-        content_text += f"いいね: {self.post_data['likes']}  返信: {self.post_data['replies']}  リポスト: {self.post_data['reposts']}"
+        content_text += f"{self.post_data['content']}\n"
+        
+        # 引用ポストの場合は引用元情報も表示
+        if self.post_data.get('is_quote_post', False) and self.post_data.get('quote_of'):
+            quote_info = self.post_data['quote_of']
+            content_text += f"\n【引用元】\n"
+            content_text += f"{quote_info['username']} {quote_info['handle']}\n"
+            content_text += f"{quote_info['content']}\n"
+            if 'like_count' in quote_info and 'repost_count' in quote_info:
+                content_text += f"いいね: {quote_info['like_count']}  リポスト: {quote_info['repost_count']}\n"
+        
+        content_text += f"\nいいね: {self.post_data['likes']}  返信: {self.post_data['replies']}  リポスト: {self.post_data['reposts']}"
         
         self.content = wx.TextCtrl(
             panel, 

@@ -10,6 +10,7 @@ import logging
 import mimetypes
 from atproto import Client as AtprotoClient
 from atproto.exceptions import AtProtocolError
+from atproto import models
 
 # 認証エラー用の例外クラス
 class AuthenticationError(Exception):
@@ -462,13 +463,20 @@ class BlueskyClient:
         try:
             logger.info(f"投稿を引用しています: {quote_of['uri']}")
             
-            # 引用を送信
-            result = self.client.send_post(
+            # 1. 引用元への参照 (StrongRef) を作成
+            quote_record_ref = models.ComAtprotoRepoStrongRef.Main(
+                uri=quote_of['uri'],
+                cid=quote_of['cid']
+            )
+            
+            # 2. 参照情報を埋め込みデータ (EmbedRecord) としてラップ
+            embed_data = models.AppBskyEmbedRecord.Main(record=quote_record_ref)
+            
+            # 3. 引用を送信（日本語投稿として言語を指定）
+            result = self.client.post(
                 text=text,
-                quote={
-                    'uri': quote_of['uri'],
-                    'cid': quote_of['cid']
-                }
+                embed=embed_data,
+                langs=['ja']  # 日本語投稿として言語を指定
             )
             
             logger.info("引用が完了しました")
