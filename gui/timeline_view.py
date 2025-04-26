@@ -194,7 +194,7 @@ class TimelineView(wx.Panel):
         self.update_login_status(False)
         
     def fetch_timeline(self, client=None, selected_uri=None):
-        """Bluesky APIを使用してタイムラインを取得
+        """Bluesky APIを使用してタイムラインを取得し、既存の投稿を保持しつつ更新
         
         Args:
             client (BlueskyClient, optional): Blueskyクライアント
@@ -221,9 +221,11 @@ class TimelineView(wx.Panel):
             logger.info("タイムラインを取得しています...")
             timeline_data = client.get_timeline(limit=50)
             
-            # 投稿データの変換
-            posts = []
+            # 新しく取得した投稿のURIセットを作成（高速検索用）
+            new_post_uris = set()
+            new_posts_dict = {}  # 一時的な辞書（URIをキー）
             
+            # 取得した投稿を処理
             for post in timeline_data.feed:
                 # 投稿データを適切な形式に変換
                 post_data = {
@@ -274,21 +276,69 @@ class TimelineView(wx.Panel):
                             }
                             logger.debug(f"ルート投稿情報: {root_uri}")
                 
-                # 投稿をリストに追加
-                posts.append(post_data)
+                uri = post_data['uri']
+                if uri:
+                    new_post_uris.add(uri)
+                    new_posts_dict[uri] = post_data
             
-            # 投稿日時でソート（最新が下）- raw_timestampフィールドを使用
-            posts.sort(key=lambda x: x['raw_timestamp'], reverse=False)
+            # 既存の投稿URIセットとマッピングを作成
+            existing_post_uris = set()
+            uri_to_index = {}  # URIからリストのインデックスへのマッピング
+            
+            for i, post in enumerate(self.list_ctrl.posts):
+                if 'uri' in post and post['uri']:
+                    uri = post['uri']
+                    existing_post_uris.add(uri)
+                    uri_to_index[uri] = i
+            
+            # 1. 新しく追加された投稿を特定
+            added_uris = new_post_uris - existing_post_uris
+            
+            # 2. 更新された投稿を特定（両方のセットに存在するURI）
+            updated_uris = new_post_uris.intersection(existing_post_uris)
+            updated_count = 0
+            
+            # テンポラリの投稿リストを作成（既存の投稿をコピー）
+            temp_posts = self.list_ctrl.posts.copy()
+            
+            # 既存の投稿を更新（インデックスマッピングを使用して高速化）
+            for uri in updated_uris:
+                if uri in uri_to_index:
+                    index = uri_to_index[uri]
+                    # 実際に変更があるかチェック（いいね数、リポスト数、返信数）
+                    old_post = temp_posts[index]
+                    new_post = new_posts_dict[uri]
+                    
+                    if (old_post['likes'] != new_post['likes'] or 
+                        old_post['reposts'] != new_post['reposts'] or 
+                        old_post['replies'] != new_post['replies']):
+                        # 投稿を更新
+                        temp_posts[index] = new_post
+                        updated_count += 1
+            
+            # 新しい投稿を追加
+            for uri in added_uris:
+                temp_posts.append(new_posts_dict[uri])
+            
+            # 投稿を日時でソート（古い順）
+            temp_posts.sort(key=lambda x: x['raw_timestamp'])
+            
+            # 投稿数を制限（オプション）
+            max_posts = 1000  # 保持する最大投稿数
+            if len(temp_posts) > max_posts:
+                # 新しい投稿を優先して保持（古い投稿を削除）
+                temp_posts = temp_posts[len(temp_posts) - max_posts:]
+                logger.debug(f"古い投稿を削除しました。残り{len(temp_posts)}件")
             
             # リストビューをクリア
             self.list_ctrl.DeleteAllItems()
             
             # 投稿データを更新
-            self.list_ctrl.posts = posts
-            self.list_ctrl.post_count = len(posts)
+            self.list_ctrl.posts = temp_posts
+            self.list_ctrl.post_count = len(temp_posts)
             
             # リストビューに投稿を追加
-            for i, post in enumerate(posts):
+            for i, post in enumerate(temp_posts):
                 index = self.list_ctrl.InsertItem(i, post['username'])
                 self.list_ctrl.SetItem(index, 1, post['content'])
                 self.list_ctrl.SetItem(index, 2, post['time'])
@@ -298,7 +348,7 @@ class TimelineView(wx.Panel):
             if selected_uri:
                 self.list_ctrl.select_post_by_uri(selected_uri)
             
-            logger.info(f"タイムラインを取得しました: {len(posts)}件")
+            logger.info(f"タイムラインを更新しました: 新規={len(added_uris)}件, 更新={updated_count}件, 合計={len(temp_posts)}件")
             
             # 再描画を強制
             wx.CallAfter(self.list_ctrl.Refresh)
