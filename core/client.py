@@ -870,3 +870,91 @@ class BlueskyClient:
         except Exception as e:
             logger.error(f"ミュート解除中に例外が発生しました: {str(e)}", exc_info=True)
             raise
+            
+    def get_following(self, handle, limit=100, cursor=None):
+        """フォロー中ユーザー一覧を取得
+        
+        Args:
+            handle (str): ユーザーハンドル
+            limit (int, optional): 取得する最大数（最大100）
+            cursor (str, optional): ページネーション用カーソル
+            
+        Returns:
+            object: フォロー中ユーザー一覧
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("フォロー中ユーザー一覧の取得に失敗しました: ログインしていません")
+            raise Exception("フォロー中ユーザー一覧の取得にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザー {handle} のフォロー中ユーザー一覧を取得しています...")
+            
+            # app.bsky.graph.getFollows APIを呼び出し
+            result = self.client.app.bsky.graph.get_follows({
+                'actor': handle,
+                'limit': min(limit, 100),  # 最大100件まで
+                'cursor': cursor
+            })
+            
+            logger.info(f"フォロー中ユーザー一覧を取得しました: {len(result.follows)}件")
+            return result
+            
+        except AtProtocolError as e:
+            # 認証エラーかどうかを確認
+            if self.handle_api_error(e, "フォロー中ユーザー一覧取得"):
+                # 認証エラーの場合は特別なエラーを発生させる
+                raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+            # その他のAPIエラーはそのまま再発生
+            raise
+            
+        except Exception as e:
+            logger.error(f"フォロー中ユーザー一覧の取得に失敗しました: {str(e)}")
+            raise
+            
+    def get_followers(self, handle, limit=100, cursor=None):
+        """フォロワー一覧を取得
+        
+        Args:
+            handle (str): ユーザーハンドル
+            limit (int, optional): 取得する最大数（最大100）
+            cursor (str, optional): ページネーション用カーソル
+            
+        Returns:
+            object: フォロワー一覧
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("フォロワー一覧の取得に失敗しました: ログインしていません")
+            raise Exception("フォロワー一覧の取得にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザー {handle} のフォロワー一覧を取得しています...")
+            
+            # app.bsky.graph.getFollowers APIを呼び出し
+            result = self.client.app.bsky.graph.get_followers({
+                'actor': handle,
+                'limit': min(limit, 100),  # 最大100件まで
+                'cursor': cursor
+            })
+            
+            logger.info(f"フォロワー一覧を取得しました: {len(result.followers)}件")
+            return result
+            
+        except AtProtocolError as e:
+            # 認証エラーかどうかを確認
+            if self.handle_api_error(e, "フォロワー一覧取得"):
+                # 認証エラーの場合は特別なエラーを発生させる
+                raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+            # その他のAPIエラーはそのまま再発生
+            raise
+            
+        except Exception as e:
+            logger.error(f"フォロワー一覧の取得に失敗しました: {str(e)}")
+            raise

@@ -119,9 +119,15 @@ class MainFrame(wx.Frame):
         settings_menu = wx.Menu()
         settings_item = settings_menu.Append(wx.ID_ANY, "設定(&S)", "アプリケーション設定")
         
+        # ユーザー操作メニュー
+        user_menu = wx.Menu()
+        following_item = user_menu.Append(wx.ID_ANY, "フォロー中ユーザー一覧(&F)", "フォロー中のユーザー一覧を表示")
+        followers_item = user_menu.Append(wx.ID_ANY, "フォロワー一覧(&W)", "フォロワーの一覧を表示")
+        
         # メニューバーにメニューを追加
         menubar.Append(app_menu, "アプリ(&A)")
         menubar.Append(post_menu, "ポスト(&P)")
+        menubar.Append(user_menu, "ユーザー操作(&U)")
         menubar.Append(settings_menu, "設定(&S)")
         
         # メニューバーをフレームに設定
@@ -141,6 +147,8 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.post_handlers.on_delete, delete_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_profile, profile_item)
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
+        self.Bind(wx.EVT_MENU, self.on_following_list, following_item)
+        self.Bind(wx.EVT_MENU, self.on_followers_list, followers_item)
     
     def set_username(self, username):
         """ユーザー名を設定し、タイトルを更新
@@ -330,3 +338,33 @@ class MainFrame(wx.Frame):
             
             # タイムラインビューに設定を適用
             self.timeline.set_auto_fetch(auto_fetch, fetch_interval)
+            
+    def on_following_list(self, event):
+        """フォロー中ユーザー一覧ダイアログを表示
+        
+        Args:
+            event: メニューイベント
+        """
+        if not self.client or not self.client.is_logged_in:
+            wx.MessageBox("フォロー中ユーザー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        from gui.dialogs.following_dialog import FollowingDialog
+        dialog = FollowingDialog(self, self.client)
+        dialog.ShowModal()
+        dialog.Destroy()
+        
+    def on_followers_list(self, event):
+        """フォロワー一覧ダイアログを表示
+        
+        Args:
+            event: メニューイベント
+        """
+        if not self.client or not self.client.is_logged_in:
+            wx.MessageBox("フォロワー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        from gui.dialogs.followers_dialog import FollowersDialog
+        dialog = FollowersDialog(self, self.client)
+        dialog.ShowModal()
+        dialog.Destroy()
