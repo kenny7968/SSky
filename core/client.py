@@ -687,9 +687,37 @@ class BlueskyClient:
             # DIDを取得
             response = self.client.resolve_handle(handle=handle)
             target_did = response.did
+            logger.debug(f"対象ユーザーのDID: {target_did}")
             
             # ブロックを実行
-            result = self.client.block_user(did=target_did)
+            from datetime import datetime, timezone
+            
+            # RFC-3339形式の日時（タイムゾーン情報を含む）
+            created_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+            logger.debug(f"生成された日時フォーマット: {created_at}")
+            
+            try:
+                # AppBskyGraphBlockRecordを使用してブロックを実行
+                result = self.client.app.bsky.graph.block.create({
+                    'repo': self.user_did,
+                    'record': {
+                        'subject': target_did,
+                        'createdAt': created_at
+                    }
+                })
+                logger.info("app.bsky.graph.block.createを使用してブロックしました")
+            except (AttributeError, Exception) as e1:
+                logger.debug(f"app.bsky.graph.block.createでのブロックに失敗: {str(e1)}")
+                # 低レベルAPIを使用（代替方法）
+                result = self.client.com.atproto.repo.create_record(data={
+                    'repo': self.user_did,
+                    'collection': 'app.bsky.graph.block',
+                    'record': {
+                        'subject': target_did,
+                        'createdAt': created_at
+                    }
+                })
+                logger.info("低レベルAPIを使用してブロックしました")
             
             logger.info("ブロックが完了しました")
             return result
@@ -725,9 +753,79 @@ class BlueskyClient:
             # DIDを取得
             response = self.client.resolve_handle(handle=handle)
             target_did = response.did
+            logger.debug(f"対象ユーザーのDID: {target_did}")
             
-            # ブロック解除を実行
-            result = self.client.delete_block(did=target_did)
+            # プロフィールからブロック情報を取得
+            profile = self.client.get_profile(actor=handle)
+            block_uri = None
+            
+            if hasattr(profile, 'viewer') and hasattr(profile.viewer, 'blocking'):
+                block_uri = profile.viewer.blocking
+                logger.debug(f"ブロックレコードURI: {block_uri}")
+            
+            if block_uri:
+                # URIからレコードキーを抽出
+                # URI形式: at://did:plc:xxxxx/app.bsky.graph.block/yyyyy
+                uri_parts = block_uri.split('/')
+                rkey = uri_parts[-1]  # 最後の部分がrkey
+                
+                # 自分のDIDを使用
+                repo = self.user_did
+                
+                # ブロックレコードのコレクション名
+                collection = 'app.bsky.graph.block'
+                
+                try:
+                    # AppBskyGraphBlockRecordを使用してブロック解除を実行
+                    result = self.client.app.bsky.graph.block.delete({
+                        'repo': repo,
+                        'rkey': rkey
+                    })
+                    logger.info("app.bsky.graph.block.deleteを使用してブロック解除しました")
+                except (AttributeError, Exception) as e1:
+                    logger.debug(f"app.bsky.graph.block.deleteでのブロック解除に失敗: {str(e1)}")
+                    # 低レベルAPIを使用（代替方法）
+                    result = self.client.com.atproto.repo.delete_record(data={
+                        'repo': repo,
+                        'collection': collection,
+                        'rkey': rkey
+                    })
+                    logger.info("低レベルAPIを使用してブロック解除しました")
+                
+                logger.info("URIを使用してブロック解除しました")
+            else:
+                # ブロックレコードが見つからない場合、ブロックレコードを検索
+                try:
+                    # ブロックコレクションからレコードを検索
+                    blocks_list = self.client.com.atproto.repo.list_records(data={
+                        'repo': self.user_did,
+                        'collection': 'app.bsky.graph.block',
+                        'limit': 100
+                    })
+                    
+                    # 対象ユーザーのブロックレコードを探す
+                    block_record = None
+                    for record in blocks_list.records:
+                        if record.value.get('subject') == target_did:
+                            block_record = record
+                            break
+                    
+                    if block_record:
+                        # ブロックレコードが見つかった場合、削除
+                        rkey = block_record.rkey
+                        result = self.client.com.atproto.repo.delete_record(data={
+                            'repo': self.user_did,
+                            'collection': 'app.bsky.graph.block',
+                            'rkey': rkey
+                        })
+                        logger.info(f"検索したブロックレコードを削除しました: rkey={rkey}")
+                    else:
+                        logger.warning(f"ユーザー {handle} (DID: {target_did}) のブロックレコードが見つかりませんでした")
+                        # ブロックされていない場合は成功として扱う
+                        return {'success': True, 'message': 'ユーザーはブロックされていません'}
+                except Exception as e2:
+                    logger.error(f"ブロックレコードの検索に失敗しました: {str(e2)}")
+                    raise Exception(f"ブロックレコードの検索に失敗しました: {str(e2)}")
             
             logger.info("ブロック解除が完了しました")
             return result
@@ -778,13 +876,18 @@ class BlueskyClient:
                 except (AttributeError, Exception) as e2:
                     logger.debug(f"bsky.graph.mute_actorでのミュートに失敗: {str(e2)}")
                     # 方法3: 低レベルAPIを直接呼び出す
-                    from datetime import datetime
+                    from datetime import datetime, timezone
+                    
+                    # RFC-3339形式の日時（タイムゾーン情報を含む）
+                    created_at = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+                    logger.debug(f"生成された日時フォーマット: {created_at}")
+                    
                     result = self.client.com.atproto.repo.create_record(data={
                         'repo': self.user_did,
                         'collection': 'app.bsky.graph.mute',
                         'record': {
                             'subject': target_did,
-                            'createdAt': datetime.now().isoformat()
+                            'createdAt': created_at
                         }
                     })
                     logger.info("低レベルAPIを使用してミュートしました")
@@ -869,4 +972,92 @@ class BlueskyClient:
             
         except Exception as e:
             logger.error(f"ミュート解除中に例外が発生しました: {str(e)}", exc_info=True)
+            raise
+            
+    def get_following(self, handle, limit=100, cursor=None):
+        """フォロー中ユーザー一覧を取得
+        
+        Args:
+            handle (str): ユーザーハンドル
+            limit (int, optional): 取得する最大数（最大100）
+            cursor (str, optional): ページネーション用カーソル
+            
+        Returns:
+            object: フォロー中ユーザー一覧
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("フォロー中ユーザー一覧の取得に失敗しました: ログインしていません")
+            raise Exception("フォロー中ユーザー一覧の取得にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザー {handle} のフォロー中ユーザー一覧を取得しています...")
+            
+            # app.bsky.graph.getFollows APIを呼び出し
+            result = self.client.app.bsky.graph.get_follows({
+                'actor': handle,
+                'limit': min(limit, 100),  # 最大100件まで
+                'cursor': cursor
+            })
+            
+            logger.info(f"フォロー中ユーザー一覧を取得しました: {len(result.follows)}件")
+            return result
+            
+        except AtProtocolError as e:
+            # 認証エラーかどうかを確認
+            if self.handle_api_error(e, "フォロー中ユーザー一覧取得"):
+                # 認証エラーの場合は特別なエラーを発生させる
+                raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+            # その他のAPIエラーはそのまま再発生
+            raise
+            
+        except Exception as e:
+            logger.error(f"フォロー中ユーザー一覧の取得に失敗しました: {str(e)}")
+            raise
+            
+    def get_followers(self, handle, limit=100, cursor=None):
+        """フォロワー一覧を取得
+        
+        Args:
+            handle (str): ユーザーハンドル
+            limit (int, optional): 取得する最大数（最大100）
+            cursor (str, optional): ページネーション用カーソル
+            
+        Returns:
+            object: フォロワー一覧
+            
+        Raises:
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("フォロワー一覧の取得に失敗しました: ログインしていません")
+            raise Exception("フォロワー一覧の取得にはログインが必要です")
+            
+        try:
+            logger.info(f"ユーザー {handle} のフォロワー一覧を取得しています...")
+            
+            # app.bsky.graph.getFollowers APIを呼び出し
+            result = self.client.app.bsky.graph.get_followers({
+                'actor': handle,
+                'limit': min(limit, 100),  # 最大100件まで
+                'cursor': cursor
+            })
+            
+            logger.info(f"フォロワー一覧を取得しました: {len(result.followers)}件")
+            return result
+            
+        except AtProtocolError as e:
+            # 認証エラーかどうかを確認
+            if self.handle_api_error(e, "フォロワー一覧取得"):
+                # 認証エラーの場合は特別なエラーを発生させる
+                raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+            # その他のAPIエラーはそのまま再発生
+            raise
+            
+        except Exception as e:
+            logger.error(f"フォロワー一覧の取得に失敗しました: {str(e)}")
             raise
