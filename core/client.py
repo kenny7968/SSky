@@ -34,6 +34,42 @@ class BlueskyClient:
         from core.data_store import DataStore
         self.data_store = DataStore()
         
+        # セッション変更イベントのコールバックを登録
+        self.register_session_change_callback()
+        
+    def register_session_change_callback(self):
+        """セッション変更イベントのコールバックを登録"""
+        try:
+            # セッション変更イベントのコールバックを登録
+            self.client.on_session_change(self.handle_session_change)
+            logger.debug("セッション変更イベントのコールバックを登録しました")
+        except Exception as e:
+            logger.error(f"セッション変更イベントのコールバック登録に失敗しました: {str(e)}")
+
+    def handle_session_change(self, event, session):
+        """セッション変更イベントのハンドラ
+        
+        Args:
+            event: セッション変更イベント（CREATE, REFRESH, IMPORTなど）
+            session: 新しいセッションオブジェクト
+        """
+        try:
+            # イベントの種類をログに記録
+            logger.debug(f"セッション変更イベントが発生しました: {event}")
+            
+            # CREATE または REFRESH イベントの場合、セッション情報を保存
+            if event in ["CREATE", "REFRESH"]:
+                # セッション情報をエクスポート
+                session_string = self.export_session_string()
+                if session_string and self.user_did:
+                    # セッション情報を保存
+                    from core.auth.auth_manager import AuthManager
+                    auth_manager = AuthManager()
+                    auth_manager.save_session(self.user_did, session_string)
+                    logger.info(f"セッション変更イベント({event})によりセッション情報を保存しました: {self.user_did}")
+        except Exception as e:
+            logger.error(f"セッション変更イベント処理中にエラーが発生しました: {str(e)}")
+        
     def handle_api_error(self, error, operation_name="API操作"):
         """API呼び出し時のエラーを処理
         

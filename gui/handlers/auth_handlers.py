@@ -45,13 +45,8 @@ class AuthHandlers:
             
             if username and password:
                 # 直接ログイン処理を実行
-                if self.perform_login(username, password):
-                    # ログイン成功後、セッション情報を保存
-                    session_string = self.client.export_session_string()
-                    if session_string:
-                        # セッション情報を暗号化せずにそのまま保存（実験用）
-                        self.auth_manager.save_session(self.client.user_did, session_string)
-                        logger.info(f"セッション情報を暗号化せずに保存しました: {self.client.user_did}")
+                self.perform_login(username, password)
+                # セッション保存処理は削除（on_session_changeコールバックで自動的に処理される）
                 # エラーメッセージは perform_login 内で表示されるので、ここでは何もしない
             else:
                 wx.MessageBox("ユーザー名とアプリパスワードを入力してください", "エラー", wx.OK | wx.ICON_ERROR)

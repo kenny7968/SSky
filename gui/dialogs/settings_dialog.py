@@ -28,6 +28,9 @@ class SettingsDialog(wx.Dialog):
             style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         )
         
+        # ダイアログが破棄中かどうかを示すフラグ
+        self.is_being_destroyed = False
+        
         # シングルトンの設定マネージャーを取得
         from config.settings_manager import SettingsManager
         self.settings_manager = SettingsManager()
@@ -121,12 +124,26 @@ class SettingsDialog(wx.Dialog):
         # 初期カテゴリの設定項目を表示
         self.show_timeline_settings()
         
+    def Destroy(self):
+        """ダイアログを破棄する前に呼び出される
+        
+        Returns:
+            bool: 破棄に成功した場合はTrue
+        """
+        # ダイアログが破棄中であることを示すフラグを設定
+        self.is_being_destroyed = True
+        return super().Destroy()
+    
     def on_category_selected(self, event):
         """カテゴリが選択されたときの処理
         
         Args:
             event: ツリー選択イベント
         """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+            
         item = event.GetItem()
         text = self.tree.GetItemText(item)
         
@@ -183,6 +200,10 @@ class SettingsDialog(wx.Dialog):
         Args:
             event: チェックボックスイベント
         """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+            
         enabled = self.enable_debug_log_cb.GetValue()
         
         # キャッシュに値を保存
@@ -285,6 +306,10 @@ class SettingsDialog(wx.Dialog):
         Args:
             event: チェックボックスイベント
         """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+            
         enabled = self.show_completion_dialog_cb.GetValue()
         
         # キャッシュに値を保存
@@ -297,6 +322,10 @@ class SettingsDialog(wx.Dialog):
         Args:
             event: チェックボックスイベント
         """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+            
         enabled = self.auto_fetch_cb.GetValue()
         self.fetch_interval_spin.Enable(enabled)
         
@@ -310,6 +339,10 @@ class SettingsDialog(wx.Dialog):
         Args:
             event: スピンコントロールイベント
         """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+            
         value = self.fetch_count_spin.GetValue()
         if value < 1:
             wx.MessageBox(
@@ -338,6 +371,10 @@ class SettingsDialog(wx.Dialog):
         Args:
             event: スピンコントロールイベント
         """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+            
         value = self.fetch_interval_spin.GetValue()
         if value < 180:
             wx.MessageBox(
@@ -371,6 +408,10 @@ class SettingsDialog(wx.Dialog):
         Args:
             event: ボタンイベント
         """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+            
         # 現在の設定値を保存
         logger.debug("OKボタンがクリックされました")
         
