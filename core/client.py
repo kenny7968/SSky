@@ -8,7 +8,7 @@ Blueskyクライアントラッパーモジュール
 
 import logging
 import mimetypes
-from atproto import Client as AtprotoClient
+from atproto import Client as AtprotoClient, SessionEvent, Session
 from atproto.exceptions import AtProtocolError
 from atproto import models
 
@@ -34,41 +34,43 @@ class BlueskyClient:
         from core.data_store import DataStore
         self.data_store = DataStore()
         
-        # セッション変更イベントのコールバックを登録
-        self.register_session_change_callback()
+        # セッション変更イベントのコールバックを登録（デコレータ構文）
+        logger.info("セッション変更イベントのコールバックを登録します（デコレータ構文）")
+        logger.debug(f"クライアントオブジェクト: {type(self.client)}")
         
-    def register_session_change_callback(self):
-        """セッション変更イベントのコールバックを登録"""
-        try:
-            # セッション変更イベントのコールバックを登録
-            self.client.on_session_change(self.handle_session_change)
-            logger.debug("セッション変更イベントのコールバックを登録しました")
-        except Exception as e:
-            logger.error(f"セッション変更イベントのコールバック登録に失敗しました: {str(e)}")
-
-    def handle_session_change(self, event, session):
-        """セッション変更イベントのハンドラ
+        @self.client.on_session_change
+        def handle_session_change(event: SessionEvent, session: Session):
+            try:
+                # イベントの種類をログに記録
+                logger.info(f"セッション変更イベントが発生しました: {event}")
+                logger.debug(f"セッションオブジェクト: 型={type(session)}")
+                logger.debug(f"セッションオブジェクトの内容: {session}")  # デバッグ目的で内容も出力
+                
+                # REFRESH イベントの場合のみ、セッション情報を保存
+                if event == SessionEvent.REFRESH:
+                    # セッション情報をエクスポート
+                    session_string = self.client.export_session_string()
+                    logger.debug(f"エクスポートしたセッション情報: 型={type(session_string)}, 長さ={len(session_string) if session_string else 'None'}")
+                    
+                    if session_string:
+                        # セッション情報を保存
+                        from core.auth.auth_manager import AuthManager
+                        auth_manager = AuthManager()
+                        logger.debug(f"セッション情報の内容: {session_string}")  # デバッグ目的で内容も出力
+                        auth_manager.save_session(self.user_did, session_string)
+                        logger.info(f"セッション変更イベント({event})によりセッション情報を保存しました: {self.client.user_did}")
+                    else:
+                        if not session_string:
+                            logger.error("セッション情報のエクスポートに失敗しました")
+                        if not self.user_did:
+                            logger.error("ユーザーDIDが設定されていません")
+            except Exception as e:
+                logger.error(f"セッション変更イベント処理中にエラーが発生しました: {str(e)}", exc_info=True)
         
-        Args:
-            event: セッション変更イベント（CREATE, REFRESH, IMPORTなど）
-            session: 新しいセッションオブジェクト
-        """
-        try:
-            # イベントの種類をログに記録
-            logger.debug(f"セッション変更イベントが発生しました: {event}")
-            
-            # CREATE または REFRESH イベントの場合、セッション情報を保存
-            if event in ["CREATE", "REFRESH"]:
-                # セッション情報をエクスポート
-                session_string = self.export_session_string()
-                if session_string and self.user_did:
-                    # セッション情報を保存
-                    from core.auth.auth_manager import AuthManager
-                    auth_manager = AuthManager()
-                    auth_manager.save_session(self.user_did, session_string)
-                    logger.info(f"セッション変更イベント({event})によりセッション情報を保存しました: {self.user_did}")
-        except Exception as e:
-            logger.error(f"セッション変更イベント処理中にエラーが発生しました: {str(e)}")
+        # インスタンス変数にハンドラを保存（ガベージコレクションを防ぐため）
+        self._session_change_handler = handle_session_change
+        
+        logger.info("セッション変更イベントのコールバックを登録しました（デコレータ構文）")
         
     def handle_api_error(self, error, operation_name="API操作"):
         """API呼び出し時のエラーを処理
@@ -109,12 +111,12 @@ class BlueskyClient:
         try:
             # セッション情報をエクスポート
             session_string = self.client.export_session_string()
-            logger.debug("セッション情報をエクスポートしました")
-            # セキュリティ上の理由からセッション文字列の内容はログに出力しない
-            logger.debug("セッション文字列をエクスポートしました（セキュリティ上の理由から内容は表示しません）")
+            logger.info("セッション情報をエクスポートしました")
+            logger.debug(f"エクスポートしたセッション情報: 型={type(session_string)}, 長さ={len(session_string) if session_string else 'None'}")
+            logger.debug(f"セッション文字列の内容: {session_string}")  # デバッグ目的で内容も出力
             return session_string
         except Exception as e:
-            logger.error(f"セッション情報のエクスポートに失敗しました: {str(e)}")
+            logger.error(f"セッション情報のエクスポートに失敗しました: {str(e)}", exc_info=True)
             return None
     
     def login_with_session(self, session_string):
@@ -196,6 +198,14 @@ class BlueskyClient:
             
             # ログイン状態を更新
             self.is_logged_in = True
+            
+            # ログイン成功後にセッション情報を保存
+            session_string = self.export_session_string()
+            if session_string and self.user_did:
+                from core.auth.auth_manager import AuthManager
+                auth_manager = AuthManager()
+                auth_manager.save_session(self.user_did, session_string)
+                logger.info(f"ログイン成功時にセッション情報を保存しました: {self.user_did}")
             
             return self.profile
             
