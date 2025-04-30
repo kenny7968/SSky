@@ -8,6 +8,7 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+import weakref
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -31,10 +32,12 @@ class ProfileDialog(wx.Dialog):
         
         self.profile_data = profile_data
         
-        # 親フレームからクライアントを取得
+        # 親フレームからクライアントを取得（弱参照を使用）
         self.client = None
+        self.parent_ref = weakref.ref(parent)
         frame = wx.GetTopLevelParent(parent)
         if hasattr(frame, 'client'):
+            # クライアントへの直接参照を保持（クライアントはシングルトンなので問題ない）
             self.client = frame.client
         
         # UIの初期化
@@ -431,3 +434,25 @@ class ProfileDialog(wx.Dialog):
             event: ボタンイベント
         """
         self.EndModal(wx.ID_CLOSE)
+        
+    def Destroy(self):
+        """ダイアログ破棄時の処理"""
+        # イベントハンドラの解除
+        self.Unbind(wx.EVT_CHAR_HOOK)
+        
+        # ボタンのイベントハンドラを解除
+        if hasattr(self, 'follow_btn'):
+            self.follow_btn.Unbind(wx.EVT_BUTTON)
+        if hasattr(self, 'unfollow_btn'):
+            self.unfollow_btn.Unbind(wx.EVT_BUTTON)
+        if hasattr(self, 'block_btn'):
+            self.block_btn.Unbind(wx.EVT_BUTTON)
+        if hasattr(self, 'mute_btn'):
+            self.mute_btn.Unbind(wx.EVT_BUTTON)
+            
+        # 親への参照をクリア
+        self.parent_ref = None
+        self.client = None
+        
+        logger.debug("ProfileDialogのリソースを解放しました")
+        return super(ProfileDialog, self).Destroy()

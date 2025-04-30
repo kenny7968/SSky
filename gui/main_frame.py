@@ -8,11 +8,14 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+from pubsub import pub  # PubSub をインポート
 from gui.timeline_view import TimelineView
-from gui.handlers.auth_handlers import AuthHandlers
+from gui.handlers.auth_service import AuthService
 from gui.handlers.post_handlers import PostHandlers
 from core.client import BlueskyClient
 from core.auth.auth_manager import AuthManager
+from core import events # イベント名をインポート
+from atproto_client.models.app.bsky.actor.defs import ProfileViewDetailed # 型ヒント用
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -35,13 +38,13 @@ class MainFrame(wx.Frame):
             style=wx.DEFAULT_FRAME_STYLE
         )
         
+        # ウィンドウクローズイベントをバインド
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
+        
         # Blueskyクライアント
         self.client = BlueskyClient()
         
-        # ユーザー名（ログイン後に設定）
-        self.username = None
-        
-        # 認証マネージャー
+        # 認証マネージャー (シングルトン)
         self.auth_manager = AuthManager()
         
         # 設定マネージャー（シングルトン）
@@ -50,20 +53,24 @@ class MainFrame(wx.Frame):
         
         # タイムラインビューを設定マネージャーのオブザーバーとして登録
         # （TimelineViewのコンストラクタで自動的に登録されるため不要）
-        
-        # イベントハンドラ
-        self.auth_handlers = AuthHandlers(self, self.client, self.auth_manager)
+
+        # 認証サービス
+        self.auth_service = AuthService(self.client, self.auth_manager)
+        # ポストハンドラ (AuthService から client を取得するように変更も検討可能)
         self.post_handlers = PostHandlers(self, self.client)
-        
+
         # UIの初期化
         self.init_ui()
-        
+
+        # PubSubイベントの購読設定
+        self._subscribe_auth_events()
+
         # 中央に配置
         self.Centre()
-        
-        # 保存されたセッションを読み込み
-        self.auth_handlers.load_session()
-        
+
+        # 保存されたセッションを読み込んでログイン試行 (UI更新はイベント経由)
+        self.auth_service.load_and_login()
+
         # 設定に基づいて自動取得を設定
         self.apply_timeline_settings()
         
@@ -133,11 +140,12 @@ class MainFrame(wx.Frame):
         # メニューバーをフレームに設定
         self.SetMenuBar(menubar)
         
-        # イベントバインド
-        self.Bind(wx.EVT_MENU, self.auth_handlers.on_login, self.login_item)
-        self.Bind(wx.EVT_MENU, self.auth_handlers.on_logout, self.logout_item)
+        # イベントバインド (認証関連)
+        self.Bind(wx.EVT_MENU, self._on_login_menu_select, self.login_item) # MainFrameのメソッドに変更
+        self.Bind(wx.EVT_MENU, self._on_logout_menu_select, self.logout_item) # MainFrameのメソッドに変更
         self.Bind(wx.EVT_MENU, self.on_reset_database, reset_db_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
+        # イベントバインド (ポスト関連)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_new_post, new_post_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_like, like_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_reply, reply_item)
@@ -149,21 +157,129 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
         self.Bind(wx.EVT_MENU, self.on_following_list, following_item)
         self.Bind(wx.EVT_MENU, self.on_followers_list, followers_item)
-    
-    def set_username(self, username):
-        """ユーザー名を設定し、タイトルを更新
-        
-        Args:
-            username (str): ユーザー名
-        """
-        self.username = username
-        self.SetTitle(f"SSky - [{username}]")
-        
-        # ログイン状態も更新
+
+    # --- PubSub Event Handlers ---
+
+    def _subscribe_auth_events(self):
+        """認証関連のPubSubイベントを購読"""
+        pub.subscribe(self._on_login_success, events.AUTH_LOGIN_SUCCESS)
+        pub.subscribe(self._on_session_load_success, events.AUTH_SESSION_LOAD_SUCCESS)
+        pub.subscribe(self._on_logout_success, events.AUTH_LOGOUT_SUCCESS)
+        pub.subscribe(self._on_login_failure, events.AUTH_LOGIN_FAILURE)
+        pub.subscribe(self._on_session_load_failure, events.AUTH_SESSION_LOAD_FAILURE)
+        pub.subscribe(self._on_session_invalid, events.AUTH_SESSION_INVALID)
+        # 必要に応じて他のイベントも購読
+        # pub.subscribe(self._on_login_attempt, events.AUTH_LOGIN_ATTEMPT)
+        # pub.subscribe(self._on_session_saved, events.AUTH_SESSION_SAVED)
+        # pub.subscribe(self._on_session_deleted, events.AUTH_SESSION_DELETED)
+        logger.debug("Subscribed to authentication events.")
+
+    def _on_login_success(self, profile: ProfileViewDetailed):
+        """ログイン成功イベントハンドラ"""
+        logger.info(f"Login successful event received for: {profile.handle}")
+        self.SetTitle(f"SSky - [{profile.handle}]")
+        self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
         self.update_login_status(True)
-    
+        # タイムラインビューも更新
+        if hasattr(self.timeline, 'update_login_status'):
+            self.timeline.update_login_status(True)
+        # タイムラインを取得
+        self.statusbar.SetStatusText("タイムラインを更新しています...")
+        if hasattr(self.timeline, 'fetch_timeline'):
+            # fetch_timeline が client を引数に取るか確認
+            self.timeline.fetch_timeline(self.client) # client を渡す
+            self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+
+    def _on_session_load_success(self, profile: ProfileViewDetailed):
+        """セッションからのログイン成功イベントハンドラ"""
+        logger.info(f"Session load successful event received for: {profile.handle}")
+        self.SetTitle(f"SSky - [{profile.handle}]")
+        self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+        self.update_login_status(True)
+        # タイムラインビューも更新
+        if hasattr(self.timeline, 'update_login_status'):
+            self.timeline.update_login_status(True)
+        # タイムラインを取得
+        self.statusbar.SetStatusText("タイムラインを更新しています...")
+        if hasattr(self.timeline, 'fetch_timeline'):
+            self.timeline.fetch_timeline(self.client)
+            self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+
+    def _on_logout_success(self):
+        """ログアウト成功イベントハンドラ"""
+        logger.info("Logout successful event received.")
+        self.SetTitle("SSky")
+        self.statusbar.SetStatusText("ログアウトしました")
+        self.update_login_status(False)
+        # タイムラインビューも更新
+        if hasattr(self.timeline, 'update_login_status'):
+            self.timeline.update_login_status(False)
+        elif hasattr(self.timeline, 'show_not_logged_in_message'):
+             self.timeline.show_not_logged_in_message()
+        # ログアウト完了ダイアログ
+        # wx.MessageBox("ログアウトしました", "ログアウト完了", wx.OK | wx.ICON_INFORMATION, parent=self)
+
+
+    def _on_login_failure(self, error: Exception):
+        """ログイン失敗イベントハンドラ"""
+        logger.error(f"Login failure event received: {error}")
+        self.statusbar.SetStatusText("ログインに失敗しました")
+        self.update_login_status(False)
+        # タイムラインビューも更新
+        if hasattr(self.timeline, 'update_login_status'):
+            self.timeline.update_login_status(False)
+        elif hasattr(self.timeline, 'show_not_logged_in_message'):
+             self.timeline.show_not_logged_in_message()
+        # エラーダイアログ表示
+        error_message = f"ログインに失敗しました: {str(error)}\n\n2段階認証を設定しているアカウントは、アプリパスワードを使用してください。"
+        wx.MessageBox(error_message, "ログイン失敗", wx.OK | wx.ICON_ERROR, parent=self)
+        # 失敗後に再度ログインダイアログを表示するロジックが必要ならここに追加
+        # self._on_login_menu_select(None)
+
+    def _on_session_load_failure(self, error: Exception | None, needs_relogin: bool):
+        """セッション読み込み失敗イベントハンドラ"""
+        logger.warning(f"Session load failure event received: error={error}, needs_relogin={needs_relogin}")
+        if needs_relogin:
+            self.statusbar.SetStatusText("セッションが無効か、読み込みに失敗しました。再ログインが必要です。")
+        else:
+            self.statusbar.SetStatusText("セッション情報が見つかりませんでした。")
+        self.update_login_status(False)
+        # タイムラインビューも更新
+        if hasattr(self.timeline, 'update_login_status'):
+            self.timeline.update_login_status(False)
+        elif hasattr(self.timeline, 'show_not_logged_in_message'):
+             self.timeline.show_not_logged_in_message()
+        # 必要ならエラーメッセージ表示
+        if error:
+             wx.MessageBox(f"セッションの読み込みに失敗しました: {error}", "セッションエラー", wx.OK | wx.ICON_WARNING, parent=self)
+
+    def _on_session_invalid(self, error: Exception, did: str):
+        """セッション無効イベントハンドラ"""
+        logger.error(f"Session invalid event received for DID {did}: {error}")
+        self.statusbar.SetStatusText("セッションが無効になりました。再ログインしてください。")
+        self.update_login_status(False)
+        # タイムラインビューも更新
+        if hasattr(self.timeline, 'update_login_status'):
+            self.timeline.update_login_status(False)
+        elif hasattr(self.timeline, 'show_not_logged_in_message'):
+             self.timeline.show_not_logged_in_message()
+        wx.MessageBox(f"セッションが無効になりました: {error}\n再ログインが必要です。", "セッションエラー", wx.OK | wx.ICON_ERROR, parent=self)
+
+
+    # --- Menu Event Handlers ---
+
+    def _on_login_menu_select(self, event):
+        """ログインメニュー選択時の処理"""
+        # AuthService にログインダイアログ表示を依頼
+        self.auth_service.show_login_dialog(self)
+
+    def _on_logout_menu_select(self, event):
+        """ログアウトメニュー選択時の処理"""
+        # AuthService にログアウト処理を依頼
+        self.auth_service.perform_logout()
+
     def update_login_status(self, is_logged_in):
-        """ログイン状態に応じてUIを更新
+        """ログイン状態に応じてUI（メニュー項目）を更新
         
         Args:
             is_logged_in (bool): ログイン状態
@@ -178,6 +294,18 @@ class MainFrame(wx.Frame):
             event: メニューイベント
         """
         self.Close()
+        
+    def OnClose(self, event):
+        """ウィンドウが閉じられる前の処理
+        
+        Args:
+            event: クローズイベント
+        """
+        # セッション保存は AuthService の _handle_session_change で自動的に行われるため、
+        # ここでの明示的な保存は不要（重複や競合の可能性がある）
+        logger.debug("MainFrame OnClose called.")
+        # イベントを処理（ウィンドウを閉じる）
+        event.Skip() # これによりデフォルトのクローズ処理が実行される
         
     def on_settings(self, event):
         """設定ダイアログを表示
@@ -292,7 +420,7 @@ class MainFrame(wx.Frame):
             
             # ログアウト処理を実行（セッション情報をクリア）
             if self.client and hasattr(self.client, 'profile') and self.client.profile:
-                self.auth_handlers.on_logout(None)
+                self.auth_service.perform_logout()
             
             # データベースファイルを削除
             try:
