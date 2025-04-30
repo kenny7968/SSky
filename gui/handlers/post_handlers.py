@@ -96,9 +96,10 @@ class PostHandlers:
         # 投稿成功
         self.show_completion_dialog("投稿が完了しました", "投稿完了")
         
-        # タイムラインを更新
+        # タイムラインを2秒後に更新
         if hasattr(self.parent, 'timeline'):
-            self.parent.timeline.fetch_timeline(self.client)
+            from utils.async_utils import run_delayed
+            run_delayed(self.parent.timeline.fetch_timeline, 2, self.client)
         
         # ステータスバーの更新
         if hasattr(self.parent, 'statusbar'):
@@ -187,9 +188,10 @@ class PostHandlers:
         if hasattr(self.parent, 'statusbar'):
             self.parent.statusbar.SetStatusText("いいねしました")
         
-        # タイムラインを更新（選択されていた投稿のURIを渡す）
+        # タイムラインを2秒後に更新（選択されていた投稿のURIを渡す）
         if hasattr(self.parent, 'timeline'):
-            self.parent.timeline.fetch_timeline(self.client, uri)
+            from utils.async_utils import run_delayed
+            run_delayed(self.parent.timeline.fetch_timeline, 2, self.client, uri)
         
         # いいね処理中フラグをリセット
         PostHandlers._liking_post = False
@@ -262,9 +264,10 @@ class PostHandlers:
                     # 返信成功
                     self.show_completion_dialog("返信が完了しました", "返信完了")
                     
-                    # タイムラインを更新
+                    # タイムラインを2秒後に更新
                     if hasattr(self.parent, 'timeline'):
-                        self.parent.timeline.fetch_timeline(self.client)
+                        from utils.async_utils import run_delayed
+                        run_delayed(self.parent.timeline.fetch_timeline, 2, self.client)
                     
                     dlg.Destroy()
                     return True
@@ -326,9 +329,10 @@ class PostHandlers:
                     # 引用成功
                     self.show_completion_dialog("引用が完了しました", "引用完了")
                     
-                    # タイムラインを更新
+                    # タイムラインを2秒後に更新
                     if hasattr(self.parent, 'timeline'):
-                        self.parent.timeline.fetch_timeline(self.client)
+                        from utils.async_utils import run_delayed
+                        run_delayed(self.parent.timeline.fetch_timeline, 2, self.client)
                     
                     dlg.Destroy()
                     return True
@@ -445,10 +449,11 @@ class PostHandlers:
         if hasattr(self.parent, 'statusbar'):
             self.parent.statusbar.SetStatusText("リポストが完了しました")
         
-        # タイムラインを更新（選択されていた投稿のURIを渡す）
+        # タイムラインを2秒後に更新（選択されていた投稿のURIを渡す）
         if hasattr(self.parent, 'timeline'):
-            logger.info("リポスト後にタイムラインを更新します")
-            self.parent.timeline.fetch_timeline(self.client, uri)
+            logger.info("リポスト後に2秒後タイムラインを更新します")
+            from utils.async_utils import run_delayed
+            run_delayed(self.parent.timeline.fetch_timeline, 2, self.client, uri)
         
         # リポスト処理中フラグをリセット
         PostHandlers._reposting_post = False
@@ -609,9 +614,10 @@ class PostHandlers:
                 if hasattr(self.parent, 'statusbar'):
                     self.parent.statusbar.SetStatusText("投稿が削除されました")
                 
-                # タイムラインを更新
+                # タイムラインを2秒後に更新
                 if hasattr(self.parent, 'timeline'):
-                    self.parent.timeline.fetch_timeline(self.client)
+                    from utils.async_utils import run_delayed
+                    run_delayed(self.parent.timeline.fetch_timeline, 2, self.client)
                     
                 return True
                 
