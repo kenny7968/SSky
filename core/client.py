@@ -50,13 +50,11 @@ class BlueskyClient:
                 if event == SessionEvent.REFRESH:
                     # セッション情報をエクスポート
                     session_string = self.client.export_session_string()
-                    logger.debug(f"エクスポートしたセッション情報: 型={type(session_string)}, 長さ={len(session_string) if session_string else 'None'}")
                     
                     if session_string:
                         # セッション情報を保存
                         from core.auth.auth_manager import AuthManager
                         auth_manager = AuthManager()
-                        logger.debug(f"セッション情報の内容: {session_string}")  # デバッグ目的で内容も出力
                         auth_manager.save_session(self.user_did, session_string)
                         logger.info(f"セッション変更イベント({event})によりセッション情報を保存しました: {self.client.user_did}")
                     else:
