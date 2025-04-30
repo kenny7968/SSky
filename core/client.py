@@ -56,7 +56,7 @@ class BlueskyClient:
                         from core.auth.auth_manager import AuthManager
                         auth_manager = AuthManager()
                         auth_manager.save_session(self.user_did, session_string)
-                        logger.info(f"セッション変更イベント({event})によりセッション情報を保存しました: {self.client.user_did}")
+                        logger.info(f"セッション変更イベント({event})によりセッション情報を保存しました: {self.user_did}")
                     else:
                         if not session_string:
                             logger.error("セッション情報のエクスポートに失敗しました")
@@ -64,7 +64,7 @@ class BlueskyClient:
                             logger.error("ユーザーDIDが設定されていません")
             except Exception as e:
                 logger.error(f"セッション変更イベント処理中にエラーが発生しました: {str(e)}", exc_info=True)
-        
+
         # インスタンス変数にハンドラを保存（ガベージコレクションを防ぐため）
         self._session_change_handler = handle_session_change
         
