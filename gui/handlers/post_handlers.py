@@ -9,8 +9,10 @@ SSky - Blueskyクライアント
 import os
 import wx
 import logging
+from pubsub import pub
 from gui.dialogs.post_dialog import PostDialog
 from utils.file_utils import read_binary_file, get_mime_type
+from core import events
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -59,58 +61,66 @@ class PostHandlers:
             post_content, attachment_files = dlg.get_post_data()
             if post_content:
                 try:
-                    # 投稿処理
+                    # ステータスバーの更新
                     if hasattr(self.parent, 'statusbar'):
                         self.parent.statusbar.SetStatusText("投稿中...")
                     
-                    # 添付ファイルがある場合
-                    if attachment_files:
-                        # 画像ファイルをアップロード
-                        uploaded_blobs = []
-                        for file_path in attachment_files:
-                            try:
-                                # ファイルデータを読み込み
-                                file_data = read_binary_file(file_path)
-                                if not file_data:
-                                    raise Exception(f"ファイルの読み込みに失敗しました: {file_path}")
-                                    
-                                # ファイルの種類を判定
-                                mime_type = get_mime_type(file_path)
-                                
-                                # ファイルをアップロード
-                                blob = self.client.upload_blob(file_data, mime_type)
-                                uploaded_blobs.append(blob)
-                                
-                            except Exception as e:
-                                logger.error(f"ファイルのアップロードに失敗しました: {str(e)}")
-                                wx.MessageBox(f"ファイルのアップロードに失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-                                if hasattr(self.parent, 'statusbar'):
-                                    self.parent.statusbar.SetStatusText("投稿に失敗しました")
-                                dlg.Destroy()
-                                return
-                        
-                        # 画像付きで投稿
-                        self.client.send_post(text=post_content, images=uploaded_blobs)
-                    else:
-                        # テキストのみ投稿
-                        self.client.send_post(text=post_content)
+                    # PubSubイベントの購読
+                    pub.subscribe(self._on_post_submit_success, events.POST_SUBMIT_SUCCESS)
+                    pub.subscribe(self._on_post_submit_failure, events.POST_SUBMIT_FAILURE)
                     
-                    # 投稿成功
-                    self.show_completion_dialog("投稿が完了しました", "投稿完了")
-                    
-                    # タイムラインを更新
-                    if hasattr(self.parent, 'timeline'):
-                        self.parent.timeline.fetch_timeline(self.client)
+                    # 非同期投稿処理を開始
+                    from gui.handlers.async_post_handler import AsyncPostHandler
+                    AsyncPostHandler.submit_post(self.client, post_content, attachment_files)
                     
                 except Exception as e:
-                    logger.error(f"投稿に失敗しました: {str(e)}")
-                    wx.MessageBox(f"投稿に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                    logger.error(f"投稿処理の開始に失敗しました: {str(e)}")
+                    wx.MessageBox(f"投稿処理の開始に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
                     if hasattr(self.parent, 'statusbar'):
                         self.parent.statusbar.SetStatusText("投稿に失敗しました")
             else:
                 wx.MessageBox("投稿内容を入力してください", "エラー", wx.OK | wx.ICON_ERROR)
         
         dlg.Destroy()
+        
+    def _on_post_submit_success(self, result):
+        """投稿成功イベントハンドラ
+        
+        Args:
+            result: 投稿結果
+        """
+        # イベント購読を解除
+        pub.unsubscribe(self._on_post_submit_success, events.POST_SUBMIT_SUCCESS)
+        pub.unsubscribe(self._on_post_submit_failure, events.POST_SUBMIT_FAILURE)
+        
+        # 投稿成功
+        self.show_completion_dialog("投稿が完了しました", "投稿完了")
+        
+        # タイムラインを更新
+        if hasattr(self.parent, 'timeline'):
+            self.parent.timeline.fetch_timeline(self.client)
+        
+        # ステータスバーの更新
+        if hasattr(self.parent, 'statusbar'):
+            self.parent.statusbar.SetStatusText("投稿が完了しました")
+    
+    def _on_post_submit_failure(self, error):
+        """投稿失敗イベントハンドラ
+        
+        Args:
+            error: エラー情報
+        """
+        # イベント購読を解除
+        pub.unsubscribe(self._on_post_submit_success, events.POST_SUBMIT_SUCCESS)
+        pub.unsubscribe(self._on_post_submit_failure, events.POST_SUBMIT_FAILURE)
+        
+        # エラーメッセージを表示
+        logger.error(f"投稿に失敗しました: {str(error)}")
+        wx.MessageBox(f"投稿に失敗しました: {str(error)}", "エラー", wx.OK | wx.ICON_ERROR)
+        
+        # ステータスバーの更新
+        if hasattr(self.parent, 'statusbar'):
+            self.parent.statusbar.SetStatusText("投稿に失敗しました")
     
     def on_like(self, event):
         """いいねアクション
@@ -142,34 +152,69 @@ class PostHandlers:
             if hasattr(self.parent, 'statusbar'):
                 self.parent.statusbar.SetStatusText("いいねしています...")
                 
-            like_response = self.client.like(selected['uri'], selected['cid'])
+            # PubSubイベントの購読
+            pub.subscribe(self._on_like_success, events.LIKE_SUCCESS)
+            pub.subscribe(self._on_like_failure, events.LIKE_FAILURE)
             
-            # レスポンスをログに出力（デバッグ用）
-            logger.info(f"いいねレスポンス: {like_response}")
+            # 非同期いいね処理を開始
+            from gui.handlers.async_post_handler import AsyncPostHandler
+            AsyncPostHandler.like_post(self.client, selected['uri'], selected['cid'])
             
-            # いいね成功
-            wx.MessageBox("投稿にいいねしました", "いいね", wx.OK | wx.ICON_INFORMATION)
-            if hasattr(self.parent, 'statusbar'):
-                self.parent.statusbar.SetStatusText("いいねしました")
-            
-            # 現在選択されている投稿のURIを取得
-            selected_uri = selected.get('uri')
-            
-            # タイムラインを更新（選択されていた投稿のURIを渡す）
-            if hasattr(self.parent, 'timeline'):
-                self.parent.timeline.fetch_timeline(self.client, selected_uri)
-                
             return True
             
         except Exception as e:
-            logger.error(f"いいね処理に失敗しました: {str(e)}")
-            wx.MessageBox(f"いいね処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            logger.error(f"いいね処理の開始に失敗しました: {str(e)}")
+            wx.MessageBox(f"いいね処理の開始に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
             if hasattr(self.parent, 'statusbar'):
                 self.parent.statusbar.SetStatusText("いいね処理に失敗しました")
-            return False
-        finally:
             # いいね処理中フラグをリセット
             PostHandlers._liking_post = False
+            return False
+            
+    def _on_like_success(self, result, uri):
+        """いいね成功イベントハンドラ
+        
+        Args:
+            result: いいね結果
+            uri: 投稿のURI
+        """
+        # イベント購読を解除
+        pub.unsubscribe(self._on_like_success, events.LIKE_SUCCESS)
+        pub.unsubscribe(self._on_like_failure, events.LIKE_FAILURE)
+        
+        # いいね成功
+        wx.MessageBox("投稿にいいねしました", "いいね", wx.OK | wx.ICON_INFORMATION)
+        if hasattr(self.parent, 'statusbar'):
+            self.parent.statusbar.SetStatusText("いいねしました")
+        
+        # タイムラインを更新（選択されていた投稿のURIを渡す）
+        if hasattr(self.parent, 'timeline'):
+            self.parent.timeline.fetch_timeline(self.client, uri)
+        
+        # いいね処理中フラグをリセット
+        PostHandlers._liking_post = False
+    
+    def _on_like_failure(self, error, uri):
+        """いいね失敗イベントハンドラ
+        
+        Args:
+            error: エラー情報
+            uri: 投稿のURI
+        """
+        # イベント購読を解除
+        pub.unsubscribe(self._on_like_success, events.LIKE_SUCCESS)
+        pub.unsubscribe(self._on_like_failure, events.LIKE_FAILURE)
+        
+        # エラーメッセージを表示
+        logger.error(f"いいね処理に失敗しました: {str(error)}")
+        wx.MessageBox(f"いいね処理に失敗しました: {str(error)}", "エラー", wx.OK | wx.ICON_ERROR)
+        
+        # ステータスバーの更新
+        if hasattr(self.parent, 'statusbar'):
+            self.parent.statusbar.SetStatusText("いいね処理に失敗しました")
+        
+        # いいね処理中フラグをリセット
+        PostHandlers._liking_post = False
     
     def on_reply(self, event):
         """返信アクション
@@ -358,43 +403,81 @@ class PostHandlers:
                 if hasattr(self.parent, 'statusbar'):
                     self.parent.statusbar.SetStatusText("リポストしています...")
                 
-                # リポストを送信
-                self.client.repost({
+                # PubSubイベントの購読
+                pub.subscribe(self._on_repost_success, events.REPOST_SUCCESS)
+                pub.subscribe(self._on_repost_failure, events.REPOST_FAILURE)
+                
+                # 非同期リポスト処理を開始
+                from gui.handlers.async_post_handler import AsyncPostHandler
+                AsyncPostHandler.repost(self.client, {
                     'uri': selected['uri'],
                     'cid': selected['cid']
                 })
-                
-                # リポスト成功
-                wx.MessageBox("リポストが完了しました", "リポスト完了", wx.OK | wx.ICON_INFORMATION)
-                if hasattr(self.parent, 'statusbar'):
-                    self.parent.statusbar.SetStatusText("リポストが完了しました")
-                
-                # タイムラインを更新（選択されていた投稿のURIを渡す）
-                if hasattr(self.parent, 'timeline'):
-                    logger.info("リポスト後にタイムラインを更新します")
-                    self.parent.timeline.fetch_timeline(self.client, selected_uri)
-                    
-                    # 重複した再描画を削除（fetch_timeline内で再描画するため）
-                    # wx.CallAfter(self.parent.timeline.Refresh)
                 
                 dlg.Destroy()
                 return True
                 
             except Exception as e:
-                logger.error(f"リポストに失敗しました: {str(e)}")
-                wx.MessageBox(f"リポストに失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                logger.error(f"リポスト処理の開始に失敗しました: {str(e)}")
+                wx.MessageBox(f"リポスト処理の開始に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
                 if hasattr(self.parent, 'statusbar'):
                     self.parent.statusbar.SetStatusText("リポストに失敗しました")
-            finally:
                 # リポスト処理中フラグをリセット
                 PostHandlers._reposting_post = False
-                
-                # タイムラインが更新されていない場合は強制的に更新
-                if hasattr(self.parent, 'timeline'):
-                    wx.CallAfter(self.parent.timeline.fetch_timeline, self.client)
+                return False
         
         dlg.Destroy()
         return False
+        
+    def _on_repost_success(self, result, uri):
+        """リポスト成功イベントハンドラ
+        
+        Args:
+            result: リポスト結果
+            uri: 投稿のURI
+        """
+        # イベント購読を解除
+        pub.unsubscribe(self._on_repost_success, events.REPOST_SUCCESS)
+        pub.unsubscribe(self._on_repost_failure, events.REPOST_FAILURE)
+        
+        # リポスト成功
+        wx.MessageBox("リポストが完了しました", "リポスト完了", wx.OK | wx.ICON_INFORMATION)
+        if hasattr(self.parent, 'statusbar'):
+            self.parent.statusbar.SetStatusText("リポストが完了しました")
+        
+        # タイムラインを更新（選択されていた投稿のURIを渡す）
+        if hasattr(self.parent, 'timeline'):
+            logger.info("リポスト後にタイムラインを更新します")
+            self.parent.timeline.fetch_timeline(self.client, uri)
+        
+        # リポスト処理中フラグをリセット
+        PostHandlers._reposting_post = False
+    
+    def _on_repost_failure(self, error, uri):
+        """リポスト失敗イベントハンドラ
+        
+        Args:
+            error: エラー情報
+            uri: 投稿のURI
+        """
+        # イベント購読を解除
+        pub.unsubscribe(self._on_repost_success, events.REPOST_SUCCESS)
+        pub.unsubscribe(self._on_repost_failure, events.REPOST_FAILURE)
+        
+        # エラーメッセージを表示
+        logger.error(f"リポストに失敗しました: {str(error)}")
+        wx.MessageBox(f"リポストに失敗しました: {str(error)}", "エラー", wx.OK | wx.ICON_ERROR)
+        
+        # ステータスバーの更新
+        if hasattr(self.parent, 'statusbar'):
+            self.parent.statusbar.SetStatusText("リポストに失敗しました")
+        
+        # リポスト処理中フラグをリセット
+        PostHandlers._reposting_post = False
+        
+        # タイムラインが更新されていない場合は強制的に更新
+        if hasattr(self.parent, 'timeline'):
+            wx.CallAfter(self.parent.timeline.fetch_timeline, self.client)
     
     def show_completion_dialog(self, message, title):
         """完了ダイアログを表示（設定に応じて）
