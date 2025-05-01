@@ -130,6 +130,8 @@ class MainFrame(wx.Frame):
         user_menu = wx.Menu()
         following_item = user_menu.Append(wx.ID_ANY, "フォロー中ユーザー一覧(&F)", "フォロー中のユーザー一覧を表示")
         followers_item = user_menu.Append(wx.ID_ANY, "フォロワー一覧(&W)", "フォロワーの一覧を表示")
+        muted_users_item = user_menu.Append(wx.ID_ANY, "ミュートしたユーザー一覧(&M)", "ミュートしたユーザーの一覧を表示")
+        blocked_users_item = user_menu.Append(wx.ID_ANY, "ブロックしたユーザー一覧(&B)", "ブロックしたユーザーの一覧を表示")
         
         # メニューバーにメニューを追加
         menubar.Append(app_menu, "アプリ(&A)")
@@ -157,6 +159,8 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
         self.Bind(wx.EVT_MENU, self.on_following_list, following_item)
         self.Bind(wx.EVT_MENU, self.on_followers_list, followers_item)
+        self.Bind(wx.EVT_MENU, self.on_muted_users_list, muted_users_item)
+        self.Bind(wx.EVT_MENU, self.on_blocked_users_list, blocked_users_item)
 
     # --- PubSub Event Handlers ---
 
@@ -494,5 +498,35 @@ class MainFrame(wx.Frame):
             
         from gui.dialogs.followers_dialog import FollowersDialog
         dialog = FollowersDialog(self, self.client)
+        dialog.ShowModal()
+        dialog.Destroy()
+        
+    def on_muted_users_list(self, event):
+        """ミュートしたユーザー一覧ダイアログを表示
+        
+        Args:
+            event: メニューイベント
+        """
+        if not self.client or not self.client.is_logged_in:
+            wx.MessageBox("ミュートしたユーザー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        from gui.dialogs.muted_users_dialog import MutedUsersDialog
+        dialog = MutedUsersDialog(self, self.client)
+        dialog.ShowModal()
+        dialog.Destroy()
+        
+    def on_blocked_users_list(self, event):
+        """ブロックしたユーザー一覧ダイアログを表示
+        
+        Args:
+            event: メニューイベント
+        """
+        if not self.client or not self.client.is_logged_in:
+            wx.MessageBox("ブロックしたユーザー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            return
+            
+        from gui.dialogs.blocked_users_dialog import BlockedUsersDialog
+        dialog = BlockedUsersDialog(self, self.client)
         dialog.ShowModal()
         dialog.Destroy()

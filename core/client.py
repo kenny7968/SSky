@@ -1105,3 +1105,89 @@ class BlueskyClient:
         except Exception as e:
             logger.error(f"フォロワー一覧の取得に失敗しました: {str(e)}")
             raise
+
+    def get_blocked_users(self, limit=100, cursor=None):
+        """ブロックしたユーザー一覧を取得
+        
+        Args:
+            limit (int, optional): 取得する最大数（最大100）
+            cursor (str, optional): ページネーション用カーソル
+            
+        Returns:
+            object: ブロックしたユーザー一覧
+            
+        Raises:
+            AuthenticationError: 認証エラーの場合
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("ブロックしたユーザー一覧の取得に失敗しました: ログインしていません")
+            raise Exception("ブロックしたユーザー一覧の取得にはログインが必要です")
+            
+        try:
+            logger.info("ブロックしたユーザー一覧を取得しています...")
+            
+            # app.bsky.graph.getBlocks APIを呼び出し
+            result = self.client.app.bsky.graph.get_blocks(params={
+                'limit': min(limit, 100),  # 最大100件まで
+                'cursor': cursor
+            })
+            
+            logger.info(f"ブロックしたユーザー一覧を取得しました: {len(result.blocks)}件")
+            return result
+            
+        except AtProtocolError as e:
+            # 認証エラーかどうかを確認
+            if self.handle_api_error(e, "ブロックしたユーザー一覧取得"):
+                # 認証エラーの場合は特別なエラーを発生させる
+                raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+            # その他のAPIエラーはそのまま再発生
+            raise
+            
+        except Exception as e:
+            logger.error(f"ブロックしたユーザー一覧の取得に失敗しました: {str(e)}")
+            raise
+            
+    def get_muted_users(self, limit=100, cursor=None):
+        """ミュートしたユーザー一覧を取得
+        
+        Args:
+            limit (int, optional): 取得する最大数（最大100）
+            cursor (str, optional): ページネーション用カーソル
+            
+        Returns:
+            object: ミュートしたユーザー一覧
+            
+        Raises:
+            AuthenticationError: 認証エラーの場合
+            AtProtocolError: API呼び出し失敗時
+            Exception: その他のエラー
+        """
+        if not self.is_logged_in:
+            logger.error("ミュートしたユーザー一覧の取得に失敗しました: ログインしていません")
+            raise Exception("ミュートしたユーザー一覧の取得にはログインが必要です")
+            
+        try:
+            logger.info("ミュートしたユーザー一覧を取得しています...")
+            
+            # app.bsky.graph.getMutes APIを呼び出し
+            result = self.client.app.bsky.graph.get_mutes(params={
+                'limit': min(limit, 100),  # 最大100件まで
+                'cursor': cursor
+            })
+            
+            logger.info(f"ミュートしたユーザー一覧を取得しました: {len(result.mutes)}件")
+            return result
+            
+        except AtProtocolError as e:
+            # 認証エラーかどうかを確認
+            if self.handle_api_error(e, "ミュートしたユーザー一覧取得"):
+                # 認証エラーの場合は特別なエラーを発生させる
+                raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
+            # その他のAPIエラーはそのまま再発生
+            raise
+            
+        except Exception as e:
+            logger.error(f"ミュートしたユーザー一覧の取得に失敗しました: {str(e)}")
+            raise
