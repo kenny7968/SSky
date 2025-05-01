@@ -22,11 +22,16 @@ class TestAuthManager(unittest.TestCase):
     
     def setUp(self):
         """テスト前の準備"""
+        # シングルトンインスタンスをリセット
+        AuthManager._instance = None
+        
         # DataStoreのモックを作成
         self.mock_data_store = MagicMock(spec=DataStore)
         
-        # AuthManagerのインスタンスを作成
-        self.auth_manager = AuthManager(data_store=self.mock_data_store)
+        # AuthManagerのシングルトンインスタンスを取得
+        self.auth_manager = AuthManager()
+        # モックのDataStoreを注入
+        self.auth_manager.data_store = self.mock_data_store
     
     @patch('core.auth.auth_manager.encrypt_data')
     def test_save_session(self, mock_encrypt):

@@ -40,6 +40,10 @@ class TimelineView(wx.Panel):
         self.timer = wx.Timer(self, TIMER_ID)
         self.time_update_timer = wx.Timer(self, TIME_UPDATE_TIMER_ID)
         
+        # 親ウィンドウのDestroyイベントをバインド
+        top_parent = wx.GetTopLevelParent(self)
+        top_parent.Bind(wx.EVT_WINDOW_DESTROY, self.on_parent_destroy)
+        
         # UIの初期化
         self.init_ui()
         
@@ -456,14 +460,13 @@ class TimelineView(wx.Panel):
                     "認証エラー",
                     wx.OK | wx.ICON_ERROR
                 )
-                
-                # 親フレームのログインダイアログを表示
-                frame = wx.GetTopLevelParent(self)
-                if hasattr(frame, 'auth_handlers') and hasattr(frame.auth_handlers, 'on_login'):
-                    wx.CallAfter(frame.auth_handlers.on_login, None)
-                    
-                # 未ログイン状態のメッセージを表示
+                # 認証エラーが発生した場合、UIを未ログイン状態に更新する
+                # 再ログインはユーザーがメニューから行う
                 self.show_not_logged_in_message()
+                # 必要であれば、PubSubでイベントを発行してMainFrameに通知することも可能
+                # from pubsub import pub
+                # from core import events
+                # pub.sendMessage(events.AUTH_SESSION_INVALID, error=e, did=getattr(client, 'user_did', None))
             else:
                 logger.error(f"タイムラインの取得に失敗しました: {str(e)}", exc_info=True)
     
@@ -502,6 +505,33 @@ class TimelineView(wx.Panel):
             dict: 選択中の投稿データ。選択されていない場合はNone
         """
         return self.list_ctrl.get_selected_post()
+        
+    def Destroy(self):
+        """ウィンドウ破棄時の処理"""
+        self.stop_timers()
+        # 設定マネージャーからオブザーバーを削除
+        if hasattr(self, 'settings_manager'):
+            self.settings_manager.remove_observer(self)
+        return super(TimelineView, self).Destroy()
+        
+    def stop_timers(self):
+        """タイマーを停止"""
+        if hasattr(self, 'timer') and self.timer.IsRunning():
+            self.timer.Stop()
+            logger.debug("自動取得タイマーを停止しました")
+            
+        if hasattr(self, 'time_update_timer') and self.time_update_timer.IsRunning():
+            self.time_update_timer.Stop()
+            logger.debug("時間表示更新タイマーを停止しました")
+            
+    def on_parent_destroy(self, event):
+        """親ウィンドウ破棄時の処理
+        
+        Args:
+            event: ウィンドウ破棄イベント
+        """
+        self.stop_timers()
+        event.Skip()  # イベントを伝播させる
 
 
 class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
@@ -822,8 +852,6 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             frame = wx.GetTopLevelParent(self)
             if hasattr(frame, 'on_delete'):
                 frame.on_delete(event)
-    
-    
     
     def on_open_url(self, event):
         """URLを開くアクション

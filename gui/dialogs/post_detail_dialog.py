@@ -8,6 +8,7 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+import weakref
 from utils.url_utils import extract_urls, open_url, handle_urls_in_text, extract_urls_from_facets
 from utils.time_format import format_timestamp_to_jst
 
@@ -32,6 +33,9 @@ class PostDetailDialog(wx.Dialog):
         )
         
         self.post_data = post_data
+        
+        # 親への弱参照を保持
+        self.parent_ref = weakref.ref(parent)
         
         # UIの初期化
         self.init_ui()
@@ -206,9 +210,11 @@ class PostDetailDialog(wx.Dialog):
             event: ボタンイベント
         """
         # 親フレームのon_likeメソッドを呼び出す
-        frame = wx.GetTopLevelParent(self.GetParent())
-        if hasattr(frame, 'on_like'):
-            frame.on_like(event)
+        parent = self.parent_ref()
+        if parent and not parent.IsBeingDeleted():
+            frame = wx.GetTopLevelParent(parent)
+            if hasattr(frame, 'on_like'):
+                frame.on_like(event)
         
     def on_reply(self, event):
         """返信ボタンクリック時の処理
@@ -217,9 +223,11 @@ class PostDetailDialog(wx.Dialog):
             event: ボタンイベント
         """
         # 親フレームのon_replyメソッドを呼び出す
-        frame = wx.GetTopLevelParent(self.GetParent())
-        if hasattr(frame, 'on_reply'):
-            frame.on_reply(event)
+        parent = self.parent_ref()
+        if parent and not parent.IsBeingDeleted():
+            frame = wx.GetTopLevelParent(parent)
+            if hasattr(frame, 'on_reply'):
+                frame.on_reply(event)
         
     def on_quote(self, event):
         """引用ボタンクリック時の処理
@@ -228,9 +236,11 @@ class PostDetailDialog(wx.Dialog):
             event: ボタンイベント
         """
         # 親フレームのon_quoteメソッドを呼び出す
-        frame = wx.GetTopLevelParent(self.GetParent())
-        if hasattr(frame, 'on_quote'):
-            frame.on_quote(event)
+        parent = self.parent_ref()
+        if parent and not parent.IsBeingDeleted():
+            frame = wx.GetTopLevelParent(parent)
+            if hasattr(frame, 'on_quote'):
+                frame.on_quote(event)
             
     def on_repost(self, event):
         """リポストボタンクリック時の処理
@@ -239,9 +249,11 @@ class PostDetailDialog(wx.Dialog):
             event: ボタンイベント
         """
         # 親フレームのon_repostメソッドを呼び出す
-        frame = wx.GetTopLevelParent(self.GetParent())
-        if hasattr(frame, 'on_repost'):
-            frame.on_repost(event)
+        parent = self.parent_ref()
+        if parent and not parent.IsBeingDeleted():
+            frame = wx.GetTopLevelParent(parent)
+            if hasattr(frame, 'on_repost'):
+                frame.on_repost(event)
         
     def on_close(self, event):
         """閉じるボタンクリック時の処理
@@ -250,3 +262,23 @@ class PostDetailDialog(wx.Dialog):
             event: ボタンイベント
         """
         self.EndModal(wx.ID_CLOSE)
+        
+    def Destroy(self):
+        """ダイアログ破棄時の処理"""
+        # イベントハンドラの解除
+        self.Unbind(wx.EVT_CHAR_HOOK)
+        if hasattr(self, 'content'):
+            self.content.Unbind(wx.EVT_TEXT_URL)
+            
+        # ボタンのイベントハンドラを解除
+        for child in self.GetChildren():
+            if isinstance(child, wx.Panel):
+                for button in child.GetChildren():
+                    if isinstance(button, wx.Button):
+                        button.Unbind(wx.EVT_BUTTON)
+        
+        # 親への参照をクリア
+        self.parent_ref = None
+        
+        logger.debug("PostDetailDialogのリソースを解放しました")
+        return super(PostDetailDialog, self).Destroy()

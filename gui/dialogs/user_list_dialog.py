@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import wx.lib.mixins.listctrl as listmix
 import logging
+import weakref
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -289,6 +290,28 @@ class UserListDialog(wx.Dialog):
         """
         self.EndModal(wx.ID_CLOSE)
         
+    def Destroy(self):
+        """ダイアログ破棄時の処理"""
+        # イベントハンドラの解除
+        self.Unbind(wx.EVT_CHAR_HOOK)
+        
+        # ボタンのイベントハンドラを解除
+        if hasattr(self, 'follow_btn'):
+            self.follow_btn.Unbind(wx.EVT_BUTTON)
+        if hasattr(self, 'mute_btn'):
+            self.mute_btn.Unbind(wx.EVT_BUTTON)
+        if hasattr(self, 'block_btn'):
+            self.block_btn.Unbind(wx.EVT_BUTTON)
+        if hasattr(self, 'load_more_btn'):
+            self.load_more_btn.Unbind(wx.EVT_BUTTON)
+            
+        # リストコントロールのイベントハンドラを解除
+        if hasattr(self, 'list_ctrl'):
+            self.list_ctrl.cleanup()
+            
+        logger.debug("UserListDialogのリソースを解放しました")
+        return super(UserListDialog, self).Destroy()
+        
     def update_status(self, message, count=None, total=None):
         """ステータスラベルを更新
         
@@ -323,6 +346,9 @@ class UserListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         )
         listmix.ListCtrlAutoWidthMixin.__init__(self)
         
+        # 親への弱参照を保持
+        self.parent_ref = weakref.ref(parent)
+        
         # カラム設定
         self.InsertColumn(0, "ユーザー名", width=150)
         self.InsertColumn(1, "ハンドル", width=150)
@@ -345,13 +371,23 @@ class UserListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         """
         self.selected_index = event.GetIndex()
         
-        # 親ダイアログのボタン状態を更新
-        parent = self.GetParent().GetParent()
-        if hasattr(parent, 'update_button_states'):
-            user = self.get_selected_user()
-            parent.update_button_states(user)
+        # 親ダイアログのボタン状態を更新（弱参照を使用）
+        parent_panel = self.GetParent()
+        if parent_panel:
+            dialog = parent_panel.GetParent()
+            if dialog and not dialog.IsBeingDeleted() and hasattr(dialog, 'update_button_states'):
+                user = self.get_selected_user()
+                dialog.update_button_states(user)
         
         event.Skip()
+        
+    def cleanup(self):
+        """リソースの解放"""
+        # イベントハンドラの解除
+        self.Unbind(wx.EVT_LIST_ITEM_SELECTED)
+        
+        # 親への参照をクリア
+        self.parent_ref = None
         
     def get_selected_user(self):
         """選択中のユーザーデータを取得
