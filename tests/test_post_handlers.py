@@ -61,10 +61,12 @@ class TestPostHandlers(unittest.TestCase):
         PostHandlers._reposting_post = False
     
     @patch('utils.auth_decorators.wx.MessageBox')
+    @patch('utils.error_handler.ErrorHandler.handle_error')
+    @patch('utils.error_handler.ErrorHandler.update_status_bar')
     @patch('gui.handlers.post_handlers.PostDialog')
     @patch('gui.handlers.post_handlers.pub')
     @patch('gui.handlers.post_handlers.AsyncPostHandler')
-    def test_on_new_post_success(self, mock_async_handler, mock_pub, mock_dialog, mock_msgbox):
+    def test_on_new_post_success(self, mock_async_handler, mock_pub, mock_dialog, mock_update_status, mock_handle_error, mock_msgbox):
         """新規投稿成功のテスト"""
         # ダイアログのモック設定
         mock_dlg = MagicMock()

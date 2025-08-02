@@ -13,7 +13,9 @@ from pubsub import pub
 from gui.dialogs.post_dialog import PostDialog
 from utils.file_utils import read_binary_file, get_mime_type
 from utils.auth_decorators import require_authentication, require_auth_and_selection
+from utils.error_handler import ErrorHandler, ErrorLevel
 from core import events
+from core.exceptions import PostError, ValidationError
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -61,8 +63,11 @@ class PostHandlers:
             if post_content:
                 try:
                     # ステータスバーの更新
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("投稿中...")
+                    ErrorHandler.update_status_bar(
+                        getattr(self.parent, 'statusbar', None), 
+                        "投稿中...", 
+                        True
+                    )
                     
                     # PubSubイベントの購読
                     pub.subscribe(self._on_post_submit_success, events.POST_SUBMIT_SUCCESS)
@@ -73,12 +78,18 @@ class PostHandlers:
                     AsyncPostHandler.submit_post(self.client, post_content, attachment_files)
                     
                 except Exception as e:
-                    logger.error(f"投稿処理の開始に失敗しました: {str(e)}")
-                    wx.MessageBox(f"投稿処理の開始に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("投稿に失敗しました")
+                    ErrorHandler.handle_error(e, "投稿処理の開始", self.parent)
+                    ErrorHandler.update_status_bar(
+                        getattr(self.parent, 'statusbar', None), 
+                        "投稿に失敗しました", 
+                        False
+                    )
             else:
-                wx.MessageBox("投稿内容を入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+                ErrorHandler.handle_validation_error(
+                    "投稿内容を入力してください", 
+                    "投稿", 
+                    self.parent
+                )
         
         dlg.Destroy()
         
@@ -93,16 +104,23 @@ class PostHandlers:
         pub.unsubscribe(self._on_post_submit_failure, events.POST_SUBMIT_FAILURE)
         
         # 投稿成功
-        self.show_completion_dialog("投稿が完了しました", "投稿完了")
+        from config.settings_manager import SettingsManager
+        settings = SettingsManager()
+        show_dialog = settings.get('post.show_completion_dialog', True)
+        
+        ErrorHandler.handle_success(
+            "投稿が完了しました", 
+            "投稿完了", 
+            self.parent,
+            show_dialog=show_dialog,
+            status_bar=getattr(self.parent, 'statusbar', None)
+        )
         
         # タイムラインを2秒後に更新
         if hasattr(self.parent, 'timeline'):
             from utils.async_utils import run_delayed
             run_delayed(self.parent.timeline.fetch_timeline, 2, self.client)
         
-        # ステータスバーの更新
-        if hasattr(self.parent, 'statusbar'):
-            self.parent.statusbar.SetStatusText("投稿が完了しました")
     
     def _on_post_submit_failure(self, error):
         """投稿失敗イベントハンドラ
@@ -115,12 +133,12 @@ class PostHandlers:
         pub.unsubscribe(self._on_post_submit_failure, events.POST_SUBMIT_FAILURE)
         
         # エラーメッセージを表示
-        logger.error(f"投稿に失敗しました: {str(error)}")
-        wx.MessageBox(f"投稿に失敗しました: {str(error)}", "エラー", wx.OK | wx.ICON_ERROR)
-        
-        # ステータスバーの更新
-        if hasattr(self.parent, 'statusbar'):
-            self.parent.statusbar.SetStatusText("投稿に失敗しました")
+        ErrorHandler.handle_error(error, "投稿", self.parent)
+        ErrorHandler.update_status_bar(
+            getattr(self.parent, 'statusbar', None), 
+            "投稿に失敗しました", 
+            False
+        )
     
     def on_like(self, event):
         """いいねアクション
@@ -141,7 +159,11 @@ class PostHandlers:
             selected = self.parent.timeline.get_selected_post()
             
         if not selected:
-            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "投稿を選択してください", 
+                "いいね", 
+                self.parent
+            )
             return False
             
         try:
@@ -149,8 +171,11 @@ class PostHandlers:
             PostHandlers._liking_post = True
             
             # いいねを付ける
-            if hasattr(self.parent, 'statusbar'):
-                self.parent.statusbar.SetStatusText("いいねしています...")
+            ErrorHandler.update_status_bar(
+                getattr(self.parent, 'statusbar', None), 
+                "いいねしています...", 
+                True
+            )
                 
             # PubSubイベントの購読
             pub.subscribe(self._on_like_success, events.LIKE_SUCCESS)
@@ -163,10 +188,12 @@ class PostHandlers:
             return True
             
         except Exception as e:
-            logger.error(f"いいね処理の開始に失敗しました: {str(e)}")
-            wx.MessageBox(f"いいね処理の開始に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-            if hasattr(self.parent, 'statusbar'):
-                self.parent.statusbar.SetStatusText("いいね処理に失敗しました")
+            ErrorHandler.handle_error(e, "いいね処理の開始", self.parent)
+            ErrorHandler.update_status_bar(
+                getattr(self.parent, 'statusbar', None), 
+                "いいね処理に失敗しました", 
+                False
+            )
             # いいね処理中フラグをリセット
             PostHandlers._liking_post = False
             return False
@@ -183,9 +210,13 @@ class PostHandlers:
         pub.unsubscribe(self._on_like_failure, events.LIKE_FAILURE)
         
         # いいね成功
-        wx.MessageBox("投稿にいいねしました", "いいね", wx.OK | wx.ICON_INFORMATION)
-        if hasattr(self.parent, 'statusbar'):
-            self.parent.statusbar.SetStatusText("いいねしました")
+        ErrorHandler.handle_success(
+            "投稿にいいねしました", 
+            "いいね", 
+            self.parent,
+            show_dialog=True,
+            status_bar=getattr(self.parent, 'statusbar', None)
+        )
         
         # タイムラインを2秒後に更新（選択されていた投稿のURIを渡す）
         if hasattr(self.parent, 'timeline'):
@@ -207,12 +238,12 @@ class PostHandlers:
         pub.unsubscribe(self._on_like_failure, events.LIKE_FAILURE)
         
         # エラーメッセージを表示
-        logger.error(f"いいね処理に失敗しました: {str(error)}")
-        wx.MessageBox(f"いいね処理に失敗しました: {str(error)}", "エラー", wx.OK | wx.ICON_ERROR)
-        
-        # ステータスバーの更新
-        if hasattr(self.parent, 'statusbar'):
-            self.parent.statusbar.SetStatusText("いいね処理に失敗しました")
+        ErrorHandler.handle_error(error, "いいね処理", self.parent)
+        ErrorHandler.update_status_bar(
+            getattr(self.parent, 'statusbar', None), 
+            "いいね処理に失敗しました", 
+            False
+        )
         
         # いいね処理中フラグをリセット
         PostHandlers._liking_post = False
@@ -232,7 +263,11 @@ class PostHandlers:
             
         # 返信に必要な情報があるか確認
         if not selected.get('uri') or not selected.get('cid'):
-            wx.MessageBox("返信に必要な情報がありません", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "返信に必要な情報がありません", 
+                "返信", 
+                self.parent
+            )
             return False
             
         # 返信ダイアログを表示
@@ -245,14 +280,27 @@ class PostHandlers:
             if reply_text:
                 try:
                     # 返信処理
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("返信を送信しています...")
+                    ErrorHandler.update_status_bar(
+                        getattr(self.parent, 'statusbar', None), 
+                        "返信を送信しています...", 
+                        True
+                    )
                     
                     # 返信を送信
                     self.client.reply_to_post(reply_text, reply_to)
                     
                     # 返信成功
-                    self.show_completion_dialog("返信が完了しました", "返信完了")
+                    from config.settings_manager import SettingsManager
+                    settings = SettingsManager()
+                    show_dialog = settings.get('post.show_completion_dialog', True)
+                    
+                    ErrorHandler.handle_success(
+                        "返信が完了しました", 
+                        "返信完了", 
+                        self.parent,
+                        show_dialog=show_dialog,
+                        status_bar=getattr(self.parent, 'statusbar', None)
+                    )
                     
                     # タイムラインを2秒後に更新
                     if hasattr(self.parent, 'timeline'):
@@ -263,12 +311,18 @@ class PostHandlers:
                     return True
                     
                 except Exception as e:
-                    logger.error(f"返信に失敗しました: {str(e)}")
-                    wx.MessageBox(f"返信に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("返信に失敗しました")
+                    ErrorHandler.handle_error(e, "返信", self.parent)
+                    ErrorHandler.update_status_bar(
+                        getattr(self.parent, 'statusbar', None), 
+                        "返信に失敗しました", 
+                        False
+                    )
             else:
-                wx.MessageBox("返信内容を入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+                ErrorHandler.handle_validation_error(
+                    "返信内容を入力してください", 
+                    "返信", 
+                    self.parent
+                )
         
         dlg.Destroy()
         return False
@@ -289,7 +343,11 @@ class PostHandlers:
         
         # 引用に必要な情報があるか確認
         if not selected.get('uri') or not selected.get('cid'):
-            wx.MessageBox("引用に必要な情報がありません", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "引用に必要な情報がありません", 
+                "引用", 
+                self.parent
+            )
             return False
             
         # 引用ダイアログを表示
@@ -302,14 +360,27 @@ class PostHandlers:
             if quote_text:
                 try:
                     # 引用処理
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("引用を送信しています...")
+                    ErrorHandler.update_status_bar(
+                        getattr(self.parent, 'statusbar', None), 
+                        "引用を送信しています...", 
+                        True
+                    )
                     
                     # 引用を送信
                     self.client.quote_post(quote_text, quote_of)
                     
                     # 引用成功
-                    self.show_completion_dialog("引用が完了しました", "引用完了")
+                    from config.settings_manager import SettingsManager
+                    settings = SettingsManager()
+                    show_dialog = settings.get('post.show_completion_dialog', True)
+                    
+                    ErrorHandler.handle_success(
+                        "引用が完了しました", 
+                        "引用完了", 
+                        self.parent,
+                        show_dialog=show_dialog,
+                        status_bar=getattr(self.parent, 'statusbar', None)
+                    )
                     
                     # タイムラインを2秒後に更新
                     if hasattr(self.parent, 'timeline'):
@@ -320,12 +391,18 @@ class PostHandlers:
                     return True
                     
                 except Exception as e:
-                    logger.error(f"引用に失敗しました: {str(e)}")
-                    wx.MessageBox(f"引用に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-                    if hasattr(self.parent, 'statusbar'):
-                        self.parent.statusbar.SetStatusText("引用に失敗しました")
+                    ErrorHandler.handle_error(e, "引用", self.parent)
+                    ErrorHandler.update_status_bar(
+                        getattr(self.parent, 'statusbar', None), 
+                        "引用に失敗しました", 
+                        False
+                    )
             else:
-                wx.MessageBox("引用コメントを入力してください", "エラー", wx.OK | wx.ICON_ERROR)
+                ErrorHandler.handle_validation_error(
+                    "引用コメントを入力してください", 
+                    "引用", 
+                    self.parent
+                )
         
         dlg.Destroy()
         return False
@@ -353,17 +430,29 @@ class PostHandlers:
             selected = self.parent.timeline.get_selected_post()
             
         if not selected:
-            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "投稿を選択してください", 
+                "リポスト", 
+                self.parent
+            )
             return False
             
         # 自分の投稿はリポストできない
         if selected.get('is_own_post', False):
-            wx.MessageBox("自分の投稿はリポストできません", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "自分の投稿はリポストできません", 
+                "リポスト", 
+                self.parent
+            )
             return False
             
         # リポストに必要な情報があるか確認
         if not selected.get('uri') or not selected.get('cid'):
-            wx.MessageBox("リポストに必要な情報がありません", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "リポストに必要な情報がありません", 
+                "リポスト", 
+                self.parent
+            )
             return False
             
         # 現在選択されている投稿のURIを記憶
@@ -383,8 +472,11 @@ class PostHandlers:
                 PostHandlers._reposting_post = True
                 
                 # リポスト処理
-                if hasattr(self.parent, 'statusbar'):
-                    self.parent.statusbar.SetStatusText("リポストしています...")
+                ErrorHandler.update_status_bar(
+                    getattr(self.parent, 'statusbar', None), 
+                    "リポストしています...", 
+                    True
+                )
                 
                 # PubSubイベントの購読
                 pub.subscribe(self._on_repost_success, events.REPOST_SUCCESS)
@@ -401,10 +493,12 @@ class PostHandlers:
                 return True
                 
             except Exception as e:
-                logger.error(f"リポスト処理の開始に失敗しました: {str(e)}")
-                wx.MessageBox(f"リポスト処理の開始に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-                if hasattr(self.parent, 'statusbar'):
-                    self.parent.statusbar.SetStatusText("リポストに失敗しました")
+                ErrorHandler.handle_error(e, "リポスト処理の開始", self.parent)
+                ErrorHandler.update_status_bar(
+                    getattr(self.parent, 'statusbar', None), 
+                    "リポストに失敗しました", 
+                    False
+                )
                 # リポスト処理中フラグをリセット
                 PostHandlers._reposting_post = False
                 return False
@@ -424,9 +518,13 @@ class PostHandlers:
         pub.unsubscribe(self._on_repost_failure, events.REPOST_FAILURE)
         
         # リポスト成功
-        wx.MessageBox("リポストが完了しました", "リポスト完了", wx.OK | wx.ICON_INFORMATION)
-        if hasattr(self.parent, 'statusbar'):
-            self.parent.statusbar.SetStatusText("リポストが完了しました")
+        ErrorHandler.handle_success(
+            "リポストが完了しました", 
+            "リポスト完了", 
+            self.parent,
+            show_dialog=True,
+            status_bar=getattr(self.parent, 'statusbar', None)
+        )
         
         # タイムラインを2秒後に更新（選択されていた投稿のURIを渡す）
         if hasattr(self.parent, 'timeline'):
@@ -449,12 +547,12 @@ class PostHandlers:
         pub.unsubscribe(self._on_repost_failure, events.REPOST_FAILURE)
         
         # エラーメッセージを表示
-        logger.error(f"リポストに失敗しました: {str(error)}")
-        wx.MessageBox(f"リポストに失敗しました: {str(error)}", "エラー", wx.OK | wx.ICON_ERROR)
-        
-        # ステータスバーの更新
-        if hasattr(self.parent, 'statusbar'):
-            self.parent.statusbar.SetStatusText("リポストに失敗しました")
+        ErrorHandler.handle_error(error, "リポスト", self.parent)
+        ErrorHandler.update_status_bar(
+            getattr(self.parent, 'statusbar', None), 
+            "リポストに失敗しました", 
+            False
+        )
         
         # リポスト処理中フラグをリセット
         PostHandlers._reposting_post = False
@@ -501,21 +599,31 @@ class PostHandlers:
         
         try:
             # ステータスバーの更新
-            if hasattr(self.parent, 'statusbar'):
-                self.parent.statusbar.SetStatusText(f"{selected['username']}のプロフィールを取得しています...")
+            ErrorHandler.update_status_bar(
+                getattr(self.parent, 'statusbar', None), 
+                f"{selected['username']}のプロフィールを取得しています...", 
+                True
+            )
                 
             # 投稿者のハンドルを取得
             author_handle = selected.get('author_handle')
             if not author_handle:
-                wx.MessageBox("投稿者のハンドルが取得できません", "エラー", wx.OK | wx.ICON_ERROR)
+                ErrorHandler.handle_validation_error(
+                    "投稿者のハンドルが取得できません", 
+                    "プロフィール表示", 
+                    self.parent
+                )
                 return False
                 
             # プロフィール情報を取得
             profile = self.client.get_profile(author_handle)
             
             # ステータスバーの更新
-            if hasattr(self.parent, 'statusbar'):
-                self.parent.statusbar.SetStatusText(f"{selected['username']}のプロフィールを表示します")
+            ErrorHandler.update_status_bar(
+                getattr(self.parent, 'statusbar', None), 
+                f"{selected['username']}のプロフィールを表示します", 
+                True
+            )
                 
             # プロフィールダイアログを表示
             from gui.dialogs.profile_dialog import ProfileDialog
@@ -526,10 +634,12 @@ class PostHandlers:
             return True
             
         except Exception as e:
-            logger.error(f"プロフィール表示に失敗しました: {str(e)}")
-            wx.MessageBox(f"プロフィール表示に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-            if hasattr(self.parent, 'statusbar'):
-                self.parent.statusbar.SetStatusText("プロフィール表示に失敗しました")
+            ErrorHandler.handle_error(e, "プロフィール表示", self.parent)
+            ErrorHandler.update_status_bar(
+                getattr(self.parent, 'statusbar', None), 
+                "プロフィール表示に失敗しました", 
+                False
+            )
             return False
     
     def on_delete(self, event):
@@ -551,17 +661,29 @@ class PostHandlers:
             selected = self.parent.timeline.get_selected_post()
             
         if not selected:
-            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "投稿を選択してください", 
+                "削除", 
+                self.parent
+            )
             return False
             
         # 自分の投稿かどうかを確認
         if not selected.get('is_own_post', False):
-            wx.MessageBox("自分の投稿のみ削除できます", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "自分の投稿のみ削除できます", 
+                "削除", 
+                self.parent
+            )
             return False
             
         # 削除に必要な情報があるか確認
         if not selected.get('uri'):
-            wx.MessageBox("投稿の削除に必要な情報がありません", "エラー", wx.OK | wx.ICON_ERROR)
+            ErrorHandler.handle_validation_error(
+                "投稿の削除に必要な情報がありません", 
+                "削除", 
+                self.parent
+            )
             return False
             
         # 削除確認ダイアログ
@@ -574,15 +696,22 @@ class PostHandlers:
                 PostHandlers._deleting_post = True
                 
                 # 投稿を削除
-                if hasattr(self.parent, 'statusbar'):
-                    self.parent.statusbar.SetStatusText("投稿を削除しています...")
+                ErrorHandler.update_status_bar(
+                    getattr(self.parent, 'statusbar', None), 
+                    "投稿を削除しています...", 
+                    True
+                )
                     
                 self.client.delete_post(selected['uri'])
                 
                 # 削除成功
-                wx.MessageBox("投稿を削除しました", "削除完了", wx.OK | wx.ICON_INFORMATION)
-                if hasattr(self.parent, 'statusbar'):
-                    self.parent.statusbar.SetStatusText("投稿が削除されました")
+                ErrorHandler.handle_success(
+                    "投稿を削除しました", 
+                    "削除完了", 
+                    self.parent,
+                    show_dialog=True,
+                    status_bar=getattr(self.parent, 'statusbar', None)
+                )
                 
                 # タイムラインを2秒後に更新
                 if hasattr(self.parent, 'timeline'):
@@ -592,10 +721,12 @@ class PostHandlers:
                 return True
                 
             except Exception as e:
-                logger.error(f"投稿の削除に失敗しました: {str(e)}")
-                wx.MessageBox(f"投稿の削除に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-                if hasattr(self.parent, 'statusbar'):
-                    self.parent.statusbar.SetStatusText("投稿の削除に失敗しました")
+                ErrorHandler.handle_error(e, "投稿の削除", self.parent)
+                ErrorHandler.update_status_bar(
+                    getattr(self.parent, 'statusbar', None), 
+                    "投稿の削除に失敗しました", 
+                    False
+                )
                 return False
             finally:
                 # 削除処理中フラグをリセット

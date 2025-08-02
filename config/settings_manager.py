@@ -10,6 +10,7 @@ import os
 import json
 import logging
 from utils.file_utils import ensure_directory_exists
+from utils.error_handler import ErrorHandler, ErrorLevel
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ class SettingsManager:
                 # 初回起動時は設定ファイルを保存
                 self.save()
         except Exception as e:
-            logger.error(f"設定ファイルの読み込みに失敗しました: {str(e)}")
+            ErrorHandler.handle_error(e, "設定ファイルの読み込み", None, show_dialog=False)
     
     def add_observer(self, observer):
         """設定変更の通知先を追加
@@ -119,7 +120,7 @@ class SettingsManager:
                     observer.on_settings_changed(key)
                     logger.debug(f"設定変更を通知しました: observer={observer}, key={key}")
                 except Exception as e:
-                    logger.error(f"設定変更の通知中にエラーが発生しました: {str(e)}")
+                    ErrorHandler.handle_error(e, "設定変更の通知", None, show_dialog=False, level=ErrorLevel.WARNING)
     
     def save(self):
         """現在の設定をファイルに保存する（変更通知付き）"""
@@ -131,7 +132,13 @@ class SettingsManager:
             # 書き込み権限のチェック
             if os.path.exists(self.settings_file):
                 if not os.access(self.settings_file, os.W_OK):
-                    logger.error(f"設定ファイルへの書き込み権限がありません: {self.settings_file}")
+                    ErrorHandler.handle_error(
+                        f"設定ファイルへの書き込み権限がありません: {self.settings_file}",
+                        "設定ファイル権限チェック",
+                        None,
+                        show_dialog=False,
+                        level=ErrorLevel.ERROR
+                    )
                     return False
             
             # 設定をJSONとして保存
@@ -144,20 +151,13 @@ class SettingsManager:
             
             return True
         except PermissionError as e:
-            logger.error(f"設定ファイルへのアクセス権限がありません: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            ErrorHandler.handle_error(e, "設定ファイル書き込み権限", None, show_dialog=False, level=ErrorLevel.ERROR)
             return False
         except IOError as e:
-            logger.error(f"設定ファイルの入出力エラー: {str(e)}")
-            import traceback
-            logger.error(traceback.format_exc())
+            ErrorHandler.handle_error(e, "設定ファイル入出力", None, show_dialog=False, level=ErrorLevel.ERROR)
             return False
         except Exception as e:
-            logger.error(f"設定ファイルの保存に失敗しました: {str(e)}")
-            # エラーの詳細をログに出力
-            import traceback
-            logger.error(traceback.format_exc())
+            ErrorHandler.handle_error(e, "設定ファイル保存", None, show_dialog=False, level=ErrorLevel.ERROR)
             return False
     
     def get(self, key, default=None):
@@ -218,7 +218,7 @@ class SettingsManager:
             
             return True
         except Exception as e:
-            logger.error(f"設定の更新に失敗しました: {str(e)}")
+            ErrorHandler.handle_error(e, "設定値更新", None, show_dialog=False, level=ErrorLevel.ERROR)
             return False
     
     def validate_settings(self):
@@ -266,6 +266,7 @@ class SettingsManager:
         # 設定値の更新
         success = self.set(key, value)
         if not success:
+            ErrorHandler.handle_validation_error("設定の更新に失敗しました。", "設定更新", None, show_dialog=False)
             return False, "設定の更新に失敗しました。"
         
         return True, None

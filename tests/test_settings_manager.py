@@ -153,7 +153,8 @@ class TestSettingsManager(unittest.TestCase):
         self.assertIsNotNone(error)
     
     @patch('config.settings_manager.ensure_directory_exists')
-    def test_set_with_validation(self, mock_ensure_dir):
+    @patch('utils.error_handler.ErrorHandler.handle_validation_error')
+    def test_set_with_validation(self, mock_handle_validation_error, mock_ensure_dir):
         """バリデーション付き設定のテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):
             manager = SettingsManager()
@@ -221,24 +222,31 @@ class TestSettingsManager(unittest.TestCase):
     
     @patch('config.settings_manager.ensure_directory_exists')
     @patch('builtins.open', side_effect=PermissionError("Permission denied"))
-    def test_save_permission_error(self, mock_open, mock_ensure_dir):
+    @patch('utils.error_handler.ErrorHandler.handle_error')
+    def test_save_permission_error(self, mock_handle_error, mock_open, mock_ensure_dir):
         """保存時の権限エラーのテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):
             manager = SettingsManager()
             result = manager.save()
             self.assertFalse(result)
+            # エラーハンドラーが呼ばれることを確認
+            mock_handle_error.assert_called()
     
     @patch('config.settings_manager.ensure_directory_exists')
     @patch('builtins.open', side_effect=IOError("IO Error"))
-    def test_save_io_error(self, mock_open, mock_ensure_dir):
+    @patch('utils.error_handler.ErrorHandler.handle_error')
+    def test_save_io_error(self, mock_handle_error, mock_open, mock_ensure_dir):
         """保存時のIOエラーのテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):
             manager = SettingsManager()
             result = manager.save()
             self.assertFalse(result)
+            # エラーハンドラーが呼ばれることを確認
+            mock_handle_error.assert_called()
     
     @patch('config.settings_manager.ensure_directory_exists')
-    def test_load_invalid_json(self, mock_ensure_dir):
+    @patch('utils.error_handler.ErrorHandler.handle_error')
+    def test_load_invalid_json(self, mock_handle_error, mock_ensure_dir):
         """無効なJSONファイルの読み込みテスト"""
         # 無効なJSONファイルを作成
         with open(self.test_settings_file, 'w') as f:
@@ -251,6 +259,8 @@ class TestSettingsManager(unittest.TestCase):
         # デフォルト設定が使用されていることを確認
         self.assertTrue(manager.get('timeline.auto_fetch'))
         self.assertEqual(manager.get('timeline.fetch_interval'), 600)
+        # エラーハンドラーが呼ばれることを確認
+        mock_handle_error.assert_called()
     
     @patch('config.settings_manager.ensure_directory_exists')
     def test_same_value_no_notification(self, mock_ensure_dir):
@@ -271,7 +281,8 @@ class TestSettingsManager(unittest.TestCase):
         mock_observer.on_settings_changed.assert_not_called()
     
     @patch('config.settings_manager.ensure_directory_exists')
-    def test_observer_error_handling(self, mock_ensure_dir):
+    @patch('utils.error_handler.ErrorHandler.handle_error')
+    def test_observer_error_handling(self, mock_handle_error, mock_ensure_dir):
         """Observer通知時のエラーハンドリングテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):
             manager = SettingsManager()
@@ -284,6 +295,8 @@ class TestSettingsManager(unittest.TestCase):
         # 設定変更（エラーが発生してもプログラムは継続されるはず）
         result = manager.set('timeline.fetch_interval', 300)
         self.assertTrue(result)
+        # エラーハンドラーが呼ばれることを確認
+        mock_handle_error.assert_called()
 
 if __name__ == '__main__':
     unittest.main()
