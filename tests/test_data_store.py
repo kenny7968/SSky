@@ -133,6 +133,71 @@ class TestDataStore(unittest.TestCase):
         
         loaded_session2 = self.data_store.load_session(user_did2)
         self.assertEqual(loaded_session2, encrypted_session2)
+    
+    def test_get_latest_session(self):
+        """最新のセッション情報取得のテスト"""
+        # テストデータを保存
+        user_did1 = 'did:plc:test_user1'
+        encrypted_session1 = b'encrypted_session1'
+        self.data_store.save_session(user_did1, encrypted_session1)
+        
+        # 少し後に別のユーザーのセッションを保存
+        import time
+        time.sleep(0.1)
+        user_did2 = 'did:plc:test_user2'
+        encrypted_session2 = b'encrypted_session2'
+        self.data_store.save_session(user_did2, encrypted_session2)
+        
+        # 最新のセッション情報を取得
+        latest_did, latest_session = self.data_store.get_latest_session()
+        
+        # 最後に保存したセッションが取得されることを確認
+        self.assertEqual(latest_did, user_did2)
+        self.assertEqual(latest_session, encrypted_session2)
+    
+    def test_get_latest_session_empty(self):
+        """空のデータベースから最新セッション取得のテスト"""
+        # 空のデータベースから取得
+        latest_did, latest_session = self.data_store.get_latest_session()
+        
+        # Noneが返されることを確認
+        self.assertIsNone(latest_did)
+        self.assertIsNone(latest_session)
+    
+    def test_session_update(self):
+        """同一ユーザーのセッション更新のテスト"""
+        # 初回セッション保存
+        user_did = 'did:plc:test_user'
+        encrypted_session1 = b'encrypted_session1'
+        self.data_store.save_session(user_did, encrypted_session1)
+        
+        # 同じユーザーで新しいセッションを保存
+        encrypted_session2 = b'encrypted_session2'
+        self.data_store.save_session(user_did, encrypted_session2)
+        
+        # 新しいセッションが取得されることを確認
+        loaded_session = self.data_store.load_session(user_did)
+        self.assertEqual(loaded_session, encrypted_session2)
+    
+    def test_database_migration(self):
+        """データベースマイグレーションのテスト"""
+        # データベースを初期化（すでにセットアップで実行済み）
+        # マイグレーションが正常に完了していることを確認
+        
+        # db_versionテーブルが存在することを確認
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+        self.assertIsNotNone(cursor.fetchone())
+        
+        # バージョン情報が正しく設定されていることを確認
+        cursor.execute("SELECT version FROM db_version ORDER BY id DESC LIMIT 1")
+        result = cursor.fetchone()
+        self.assertIsNotNone(result)
+        self.assertEqual(result[0], 1)
+        
+        conn.close()
 
 if __name__ == '__main__':
     unittest.main()
