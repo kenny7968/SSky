@@ -15,7 +15,7 @@ import os
 # プロジェクトのルートディレクトリをパスに追加
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from utils.error_handler import ErrorHandler, ErrorLevel
+from core.error_handler import UnifiedErrorHandler as ErrorHandler, ErrorLevel
 from core.exceptions import SSkyError, AuthenticationError, ValidationError, BlueskyAPIError
 
 class TestErrorHandler(unittest.TestCase):

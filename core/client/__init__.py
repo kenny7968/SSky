@@ -11,7 +11,7 @@ from core.client.api_client import BlueskyApiClient
 from core.client.auth_manager import BlueskyAuthManager
 from core.client.session_manager import BlueskySessionManager
 from core.client.user_manager import BlueskyUserManager
-from core.client.error_handler import BlueskyErrorHandler
+from core.error_handler import UnifiedErrorHandler as BlueskyErrorHandler
 
 # バージョン情報
 __version__ = '0.2.0'

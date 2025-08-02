@@ -153,7 +153,7 @@ class TestSettingsManager(unittest.TestCase):
         self.assertIsNotNone(error)
     
     @patch('config.settings_manager.ensure_directory_exists')
-    @patch('utils.error_handler.ErrorHandler.handle_validation_error')
+    @patch('core.error_handler.UnifiedErrorHandler.handle_validation_error')
     def test_set_with_validation(self, mock_handle_validation_error, mock_ensure_dir):
         """バリデーション付き設定のテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):
@@ -222,7 +222,7 @@ class TestSettingsManager(unittest.TestCase):
     
     @patch('config.settings_manager.ensure_directory_exists')
     @patch('builtins.open', side_effect=PermissionError("Permission denied"))
-    @patch('utils.error_handler.ErrorHandler.handle_error')
+    @patch('core.error_handler.UnifiedErrorHandler.handle_error')
     def test_save_permission_error(self, mock_handle_error, mock_open, mock_ensure_dir):
         """保存時の権限エラーのテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):
@@ -234,7 +234,7 @@ class TestSettingsManager(unittest.TestCase):
     
     @patch('config.settings_manager.ensure_directory_exists')
     @patch('builtins.open', side_effect=IOError("IO Error"))
-    @patch('utils.error_handler.ErrorHandler.handle_error')
+    @patch('core.error_handler.UnifiedErrorHandler.handle_error')
     def test_save_io_error(self, mock_handle_error, mock_open, mock_ensure_dir):
         """保存時のIOエラーのテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):
@@ -245,7 +245,7 @@ class TestSettingsManager(unittest.TestCase):
             mock_handle_error.assert_called()
     
     @patch('config.settings_manager.ensure_directory_exists')
-    @patch('utils.error_handler.ErrorHandler.handle_error')
+    @patch('core.error_handler.UnifiedErrorHandler.handle_error')
     def test_load_invalid_json(self, mock_handle_error, mock_ensure_dir):
         """無効なJSONファイルの読み込みテスト"""
         # 無効なJSONファイルを作成
@@ -281,7 +281,7 @@ class TestSettingsManager(unittest.TestCase):
         mock_observer.on_settings_changed.assert_not_called()
     
     @patch('config.settings_manager.ensure_directory_exists')
-    @patch('utils.error_handler.ErrorHandler.handle_error')
+    @patch('core.error_handler.UnifiedErrorHandler.handle_error')
     def test_observer_error_handling(self, mock_handle_error, mock_ensure_dir):
         """Observer通知時のエラーハンドリングテスト"""
         with patch.object(SettingsManager, 'settings_file', self.test_settings_file):

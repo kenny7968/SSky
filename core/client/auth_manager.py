@@ -3,7 +3,7 @@
 
 """
 SSky - Blueskyクライアント
-認証管理を担当するクラス
+Bluesky認証処理専門クラス（リファクタリング版）
 """
 
 import logging
@@ -12,13 +12,16 @@ from atproto import Client as AtprotoClient
 from atproto.exceptions import AtProtocolError
 from core.exceptions import AuthenticationError
 
-# ロガーの設定
 logger = logging.getLogger(__name__)
 
 class BlueskyAuthManager:
-    """認証処理を担当するクラス
+    """Bluesky API認証処理専門クラス（リファクタリング版）
     
-    ログイン/ログアウト処理、セッション管理との連携を担当します。
+    責任:
+    - Bluesky APIへのログイン/ログアウト処理
+    - セッション情報のエクスポート/インポート
+    - 認証エラーの判定と処理
+    - ログイン状態の管理
     """
     
     def __init__(self, api_client=None, session_manager=None):
@@ -165,8 +168,25 @@ class BlueskyAuthManager:
             logger.error(f"セッション情報のエクスポートに失敗しました: {str(e)}", exc_info=True)
             return None
     
-    def handle_api_error(self, error, operation_name="API操作"):
-        """API呼び出し時のエラーを処理
+    def is_authentication_error(self, error) -> bool:
+        """エラーが認証関連かどうかを判定
+        
+        Args:
+            error: 発生したエラー
+            
+        Returns:
+            bool: 認証エラーの場合はTrue
+        """
+        if isinstance(error, AtProtocolError):
+            error_str = str(error).lower()
+            return ("auth" in error_str or 
+                   "authentication" in error_str or 
+                   "unauthorized" in error_str or
+                   "invalid_token" in error_str)
+        return False
+    
+    def handle_authentication_error(self, error, operation_name="API操作"):
+        """認証エラーを処理してログイン状態をリセット
         
         Args:
             error: 発生したエラー
@@ -175,18 +195,15 @@ class BlueskyAuthManager:
         Returns:
             bool: 再ログインが必要な場合はTrue
         """
-        if isinstance(error, AtProtocolError):
-            # 認証エラーかどうかを確認
-            if "auth" in str(error).lower() or "authentication" in str(error).lower():
-                logger.error(f"{operation_name}中に認証エラーが発生しました: {str(error)}")
-                
-                # ログイン状態をリセット
-                self.is_logged_in = False
-                self.profile = None
-                
-                # 再ログインが必要
-                return True
+        if self.is_authentication_error(error):
+            logger.error(f"{operation_name}中に認証エラーが発生しました: {str(error)}")
+            
+            # ログイン状態をリセット
+            self.is_logged_in = False
+            self.profile = None
+            self.user_did = None
+            
+            return True
         
-        # その他のエラー
         logger.error(f"{operation_name}中にエラーが発生しました: {str(error)}")
         return False

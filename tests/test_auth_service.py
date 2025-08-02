@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from gui.handlers.auth_service import AuthService
 from core.client import BlueskyClient
-from core.auth.auth_manager import AuthManager
+from core.auth.credential_manager import AuthCredentialManager
 from atproto_client import Session, SessionEvent
 from core import events
 

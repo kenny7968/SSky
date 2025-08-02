@@ -13,7 +13,7 @@ from gui.timeline.timeline_view import TimelineView
 from gui.handlers.auth_service import AuthService
 from gui.handlers.post_handlers import PostHandlers
 from core.client import BlueskyClient
-from core.auth.auth_manager import AuthManager
+from core.auth.credential_manager import AuthCredentialManager
 from core import events # イベント名をインポート
 from atproto_client.models.app.bsky.actor.defs import ProfileViewDetailed # 型ヒント用
 from utils.auth_decorators import require_authentication
@@ -46,7 +46,7 @@ class MainFrame(wx.Frame):
         self.client = BlueskyClient()
         
         # 認証マネージャー (シングルトン)
-        self.auth_manager = AuthManager()
+        self.credential_manager = AuthCredentialManager()
         
         # 設定マネージャー（シングルトン）
         from config.settings_manager import SettingsManager
@@ -56,7 +56,7 @@ class MainFrame(wx.Frame):
         # （TimelineViewのコンストラクタで自動的に登録されるため不要）
 
         # 認証サービス
-        self.auth_service = AuthService(self.client, self.auth_manager)
+        self.auth_service = AuthService(self.client, self.credential_manager)
         # ポストハンドラ (AuthService から client を取得するように変更も検討可能)
         self.post_handlers = PostHandlers(self, self.client)
 
@@ -421,7 +421,7 @@ class MainFrame(wx.Frame):
             import os
             
             # データベースファイルのパスを取得
-            db_path = self.auth_manager.data_store.db_path
+            db_path = self.credential_manager.data_store.db_path
             
             # ログアウト処理を実行（セッション情報をクリア）
             if self.client and hasattr(self.client, 'profile') and self.client.profile:

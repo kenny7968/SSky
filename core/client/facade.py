@@ -15,7 +15,7 @@ from core.client.api_client import BlueskyApiClient
 from core.client.auth_manager import BlueskyAuthManager
 from core.client.session_manager import BlueskySessionManager
 from core.client.user_manager import BlueskyUserManager
-from core.client.error_handler import BlueskyErrorHandler
+from core.error_handler import UnifiedErrorHandler
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class BlueskyClient:
         self.api_client = BlueskyApiClient()
         self.session_manager = BlueskySessionManager(self.api_client)
         self.auth_manager = BlueskyAuthManager(self.api_client, self.session_manager)
-        self.error_handler = BlueskyErrorHandler(self.auth_manager)
+        self.error_handler = UnifiedErrorHandler(self.auth_manager)
         self.user_manager = BlueskyUserManager(self.api_client, self.auth_manager)
         
         # セッションマネージャーにAPIクライアントを登録

@@ -13,7 +13,7 @@ from pubsub import pub
 from gui.dialogs.post_dialog import PostDialog
 from utils.file_utils import read_binary_file, get_mime_type
 from utils.auth_decorators import require_authentication, require_auth_and_selection
-from utils.error_handler import ErrorHandler, ErrorLevel
+from core.error_handler import UnifiedErrorHandler as ErrorHandler, ErrorLevel
 from core import events
 from core.exceptions import PostError, ValidationError
 

@@ -10,7 +10,7 @@ import os
 import json
 import logging
 from utils.file_utils import ensure_directory_exists
-from utils.error_handler import ErrorHandler, ErrorLevel
+from core.error_handler import UnifiedErrorHandler as ErrorHandler, ErrorLevel
 
 # ロガーの設定
 logger = logging.getLogger(__name__)

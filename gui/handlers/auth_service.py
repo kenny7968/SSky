@@ -12,36 +12,34 @@ import typing
 from pubsub import pub # PyPubSub をインポート
 from atproto_client import Session, SessionEvent # SDK の型をインポート
 
-from gui.dialogs.login_dialog import LoginDialog # show_login_dialog のために必要
-from core.auth.auth_manager import AuthManager
+from gui.dialogs.login_dialog import LoginDialog
+from core.auth.credential_manager import AuthCredentialManager
 from core.client import BlueskyClient
 from core.exceptions import AuthenticationError
-from core import events # 定義したイベント名をインポート
+from core import events
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
 class AuthService:
-    """認証プロセスを管理し、イベントを発行するサービス
+    """認証UIフロー・イベント管理専門クラス（リファクタリング版）
     
-    このクラスは以下の責任を持ちます：
+    責任:
     - 認証プロセスのフロー管理（ログイン、ログアウト、セッション管理）
     - 認証関連のUI操作（ダイアログ表示など）
     - 認証イベントの発行と伝播
     - セッション状態の変更監視
-    
-    セッションの実際の保存と取得はAuthManagerが担当します。
     """
 
-    def __init__(self, client: BlueskyClient, auth_manager: AuthManager):
+    def __init__(self, client: BlueskyClient, credential_manager: AuthCredentialManager):
         """初期化
         
         Args:
             client (BlueskyClient): Blueskyクライアントインスタンス
-            auth_manager (AuthManager): 認証情報管理インスタンス
+            credential_manager (AuthCredentialManager): 認証情報管理インスタンス
         """
         self.client = client
-        self.auth_manager = auth_manager
+        self.credential_manager = credential_manager
 
         # SDK のセッション変更イベントを購読
         if hasattr(self.client, 'on_session_change') and callable(self.client.on_session_change):
@@ -86,7 +84,7 @@ class AuthService:
                     
                 if session_string and user_did:
                     logger.debug(f"Saving session for DID: {user_did}")
-                    saved = self.auth_manager.save_session(user_did, session_string)
+                    saved = self.credential_manager.save_encrypted_session(user_did, session_string)
                     if saved:
                         # セッション保存成功イベントを発行
                         pub.sendMessage(events.AUTH_SESSION_SAVED, did=user_did)
@@ -189,7 +187,7 @@ class AuthService:
                     self.client.profile = None
 
                 # セッション情報を永続化ストアから削除
-                deleted = self.auth_manager.delete_session(user_did)
+                deleted = self.credential_manager.delete_session(user_did)
                 if deleted:
                     logger.info(f"Session deleted for DID: {user_did}")
                     pub.sendMessage(events.AUTH_SESSION_DELETED, did=user_did)
@@ -245,7 +243,7 @@ class AuthService:
             pub.sendMessage(events.AUTH_SESSION_INVALID, error=e, did=user_did)
 
             # 無効なセッション情報を削除
-            deleted = self.auth_manager.delete_session(user_did)
+            deleted = self.credential_manager.delete_session(user_did)
             if deleted:
                 logger.info(f"Invalid session deleted for DID: {user_did}")
                 pub.sendMessage(events.AUTH_SESSION_DELETED, did=user_did)
@@ -264,7 +262,7 @@ class AuthService:
         """
         logger.debug("Attempting to load session from store...")
         try:
-            session_data, user_did = self.auth_manager.load_session() # 変更: load_session は復号化済みデータを返す想定
+            session_data, user_did = self.credential_manager.load_encrypted_session()
             if session_data and user_did:
                 logger.info(f"Session data found for DID: {user_did}. Attempting login.")
 

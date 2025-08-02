@@ -61,8 +61,8 @@ class TestPostHandlers(unittest.TestCase):
         PostHandlers._reposting_post = False
     
     @patch('utils.auth_decorators.wx.MessageBox')
-    @patch('utils.error_handler.ErrorHandler.handle_error')
-    @patch('utils.error_handler.ErrorHandler.update_status_bar')
+    @patch('core.error_handler.UnifiedErrorHandler.handle_error')
+    @patch('core.error_handler.UnifiedErrorHandler.update_status_bar')
     @patch('gui.handlers.post_handlers.PostDialog')
     @patch('gui.handlers.post_handlers.pub')
     @patch('gui.handlers.post_handlers.AsyncPostHandler')
