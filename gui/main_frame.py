@@ -16,6 +16,7 @@ from core.client import BlueskyClient
 from core.auth.auth_manager import AuthManager
 from core import events # イベント名をインポート
 from atproto_client.models.app.bsky.actor.defs import ProfileViewDetailed # 型ヒント用
+from utils.auth_decorators import require_authentication
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -471,60 +472,52 @@ class MainFrame(wx.Frame):
             # タイムラインビューに設定を適用
             self.timeline.set_auto_fetch(auto_fetch, fetch_interval)
             
+    @require_authentication("フォロー中ユーザー一覧を表示するにはログインしてください")
     def on_following_list(self, event):
         """フォロー中ユーザー一覧ダイアログを表示
         
         Args:
             event: メニューイベント
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("フォロー中ユーザー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return
             
         from gui.dialogs.following_dialog import FollowingDialog
         dialog = FollowingDialog(self, self.client)
         dialog.ShowModal()
         dialog.Destroy()
         
+    @require_authentication("フォロワー一覧を表示するにはログインしてください")
     def on_followers_list(self, event):
         """フォロワー一覧ダイアログを表示
         
         Args:
             event: メニューイベント
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("フォロワー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return
             
         from gui.dialogs.followers_dialog import FollowersDialog
         dialog = FollowersDialog(self, self.client)
         dialog.ShowModal()
         dialog.Destroy()
         
+    @require_authentication("ミュートしたユーザー一覧を表示するにはログインしてください")
     def on_muted_users_list(self, event):
         """ミュートしたユーザー一覧ダイアログを表示
         
         Args:
             event: メニューイベント
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("ミュートしたユーザー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return
             
         from gui.dialogs.muted_users_dialog import MutedUsersDialog
         dialog = MutedUsersDialog(self, self.client)
         dialog.ShowModal()
         dialog.Destroy()
         
+    @require_authentication("ブロックしたユーザー一覧を表示するにはログインしてください")
     def on_blocked_users_list(self, event):
         """ブロックしたユーザー一覧ダイアログを表示
         
         Args:
             event: メニューイベント
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("ブロックしたユーザー一覧を表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return
             
         from gui.dialogs.blocked_users_dialog import BlockedUsersDialog
         dialog = BlockedUsersDialog(self, self.client)

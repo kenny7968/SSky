@@ -12,6 +12,7 @@ import logging
 from pubsub import pub
 from gui.dialogs.post_dialog import PostDialog
 from utils.file_utils import read_binary_file, get_mime_type
+from utils.auth_decorators import require_authentication, require_auth_and_selection
 from core import events
 
 # ロガーの設定
@@ -43,15 +44,13 @@ class PostHandlers:
             from config.settings_manager import SettingsManager
             self.settings_manager = SettingsManager()
         
+    @require_authentication("投稿するにはログインしてください")
     def on_new_post(self, event):
         """新規投稿ダイアログを表示
         
         Args:
             event: メニューイベント
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("投稿するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return
             
         # 投稿ダイアログの作成
         dlg = PostDialog(self.parent)
@@ -218,6 +217,7 @@ class PostHandlers:
         # いいね処理中フラグをリセット
         PostHandlers._liking_post = False
     
+    @require_auth_and_selection("返信するにはログインしてください", "返信する投稿を選択してください")
     def on_reply(self, event):
         """返信アクション
         
@@ -227,18 +227,8 @@ class PostHandlers:
         Returns:
             bool: 成功した場合はTrue
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("返信するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return False
-            
-        # タイムラインから選択された投稿を取得
-        selected = None
-        if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'get_selected_post'):
-            selected = self.parent.timeline.get_selected_post()
-            
-        if not selected:
-            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
-            return False
+        # タイムラインから選択された投稿を取得（デコレータで事前チェック済み）
+        selected = self.parent.timeline.get_selected_post()
             
         # 返信に必要な情報があるか確認
         if not selected.get('uri') or not selected.get('cid'):
@@ -283,6 +273,7 @@ class PostHandlers:
         dlg.Destroy()
         return False
     
+    @require_auth_and_selection("引用するにはログインしてください", "引用する投稿を選択してください")
     def on_quote(self, event):
         """引用アクション
         
@@ -292,19 +283,10 @@ class PostHandlers:
         Returns:
             bool: 成功した場合はTrue
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("引用するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return False
             
-        # タイムラインから選択された投稿を取得
-        selected = None
-        if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'get_selected_post'):
-            selected = self.parent.timeline.get_selected_post()
-            
-        if not selected:
-            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
-            return False
-            
+        # タイムラインから選択された投稿を取得（デコレータで事前チェック済み）
+        selected = self.parent.timeline.get_selected_post()
+        
         # 引用に必要な情報があるか確認
         if not selected.get('uri') or not selected.get('cid'):
             wx.MessageBox("引用に必要な情報がありません", "エラー", wx.OK | wx.ICON_ERROR)
@@ -351,6 +333,7 @@ class PostHandlers:
     # リポスト処理中フラグ（二重リポスト防止用）
     _reposting_post = False
     
+    @require_authentication("リポストするにはログインしてください")
     def on_repost(self, event):
         """リポストアクション
         
@@ -362,10 +345,6 @@ class PostHandlers:
         """
         # リポスト処理中なら何もしない（二重リポスト防止）
         if PostHandlers._reposting_post:
-            return False
-            
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("リポストするにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
             return False
             
         # タイムラインから選択された投稿を取得
@@ -507,6 +486,7 @@ class PostHandlers:
                 self.parent.statusbar.SetStatusText(message)
             return False
     
+    @require_auth_and_selection("プロフィールを表示するにはログインしてください", "プロフィールを表示する投稿を選択してください")
     def on_profile(self, event):
         """プロフィール表示アクション
         
@@ -516,19 +496,9 @@ class PostHandlers:
         Returns:
             bool: 成功した場合はTrue
         """
-        if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("プロフィールを表示するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
-            return False
-            
-        # タイムラインから選択された投稿を取得
-        selected = None
-        if hasattr(self.parent, 'timeline') and hasattr(self.parent.timeline, 'get_selected_post'):
-            selected = self.parent.timeline.get_selected_post()
-            
-        if not selected:
-            wx.MessageBox("投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR)
-            return False
-            
+        # タイムラインから選択された投稿を取得（デコレータで事前チェック済み）
+        selected = self.parent.timeline.get_selected_post()
+        
         try:
             # ステータスバーの更新
             if hasattr(self.parent, 'statusbar'):

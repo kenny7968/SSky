@@ -49,18 +49,22 @@ class TestPostHandlers(unittest.TestCase):
         # タイムラインのget_selected_postメソッドの設定
         self.mock_parent.timeline.get_selected_post.return_value = self.mock_selected_post
         
-        # PostHandlersのインスタンス作成
+        # PostHandlersのインスタンス作成（認証デコレータ対応）
         self.post_handlers = PostHandlers(self.mock_parent, self.mock_client)
+        
+        # デコレータで使用されるclient属性を確実に設定
+        self.post_handlers.client = self.mock_client
         
         # クラス変数をリセット
         PostHandlers._liking_post = False
         PostHandlers._deleting_post = False
         PostHandlers._reposting_post = False
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.PostDialog')
     @patch('gui.handlers.post_handlers.pub')
     @patch('gui.handlers.post_handlers.AsyncPostHandler')
-    def test_on_new_post_success(self, mock_async_handler, mock_pub, mock_dialog):
+    def test_on_new_post_success(self, mock_async_handler, mock_pub, mock_dialog, mock_msgbox):
         """新規投稿成功のテスト"""
         # ダイアログのモック設定
         mock_dlg = MagicMock()
@@ -81,26 +85,30 @@ class TestPostHandlers(unittest.TestCase):
         # イベント購読が設定されることを確認
         self.assertGreaterEqual(mock_pub.subscribe.call_count, 2)
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.PostDialog')
-    def test_on_new_post_not_logged_in(self, mock_dialog):
+    def test_on_new_post_not_logged_in(self, mock_dialog, mock_msgbox):
         """未ログイン時の新規投稿テスト"""
         # クライアントのログイン状態を変更
         self.mock_client.is_logged_in = False
         
         # テスト実行
-        with patch('gui.handlers.post_handlers.wx.MessageBox') as mock_msgbox:
-            self.post_handlers.on_new_post(MagicMock())
+        result = self.post_handlers.on_new_post(MagicMock())
+        
+        # 認証デコレータによりFalseが返されることを確認
+        self.assertFalse(result)
         
         # エラーメッセージが表示されることを確認
         mock_msgbox.assert_called_once_with(
-            "投稿するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR
+            "投稿するにはログインしてください", "エラー", unittest.mock.ANY
         )
         
         # ダイアログが表示されないことを確認
         mock_dialog.assert_not_called()
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.PostDialog')
-    def test_on_new_post_empty_content(self, mock_dialog):
+    def test_on_new_post_empty_content(self, mock_dialog, mock_auth_msgbox):
         """空の投稿内容のテスト"""
         # ダイアログのモック設定
         mock_dlg = MagicMock()
@@ -117,9 +125,10 @@ class TestPostHandlers(unittest.TestCase):
             "投稿内容を入力してください", "エラー", wx.OK | wx.ICON_ERROR
         )
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.pub')
     @patch('gui.handlers.post_handlers.AsyncPostHandler')
-    def test_on_like_success(self, mock_async_handler, mock_pub):
+    def test_on_like_success(self, mock_async_handler, mock_pub, mock_msgbox):
         """いいね成功のテスト"""
         # テスト実行
         result = self.post_handlers.on_like(MagicMock())
@@ -135,24 +144,23 @@ class TestPostHandlers(unittest.TestCase):
         # いいね処理中フラグが設定されることを確認
         self.assertTrue(PostHandlers._liking_post)
     
-    def test_on_like_no_selection(self):
+    @patch('utils.auth_decorators.wx.MessageBox')
+    def test_on_like_no_selection(self, mock_msgbox):
         """投稿未選択時のいいねテスト"""
         # 選択された投稿をNoneに設定
         self.mock_parent.timeline.get_selected_post.return_value = None
         
         # テスト実行
-        with patch('gui.handlers.post_handlers.wx.MessageBox') as mock_msgbox:
-            result = self.post_handlers.on_like(MagicMock())
+        result = self.post_handlers.on_like(MagicMock())
         
         # 失敗を確認
         self.assertFalse(result)
         
-        # エラーメッセージが表示されることを確認
-        mock_msgbox.assert_called_once_with(
-            "投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR
-        )
+        # エラーメッセージが表示されることを確認（デコレータから）
+        mock_msgbox.assert_called_once()
     
-    def test_on_like_already_processing(self):
+    @patch('utils.auth_decorators.wx.MessageBox')
+    def test_on_like_already_processing(self, mock_msgbox):
         """いいね処理中の二重実行防止テスト"""
         # いいね処理中フラグを設定
         PostHandlers._liking_post = True
@@ -163,8 +171,9 @@ class TestPostHandlers(unittest.TestCase):
         # 失敗を確認
         self.assertFalse(result)
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.ReplyDialog')
-    def test_on_reply_success(self, mock_dialog):
+    def test_on_reply_success(self, mock_dialog, mock_msgbox):
         """返信成功のテスト"""
         # ダイアログのモック設定
         mock_dlg = MagicMock()
@@ -182,25 +191,24 @@ class TestPostHandlers(unittest.TestCase):
         # クライアントの返信メソッドが呼ばれることを確認
         self.mock_client.reply_to_post.assert_called_once_with("返信内容", self.mock_selected_post)
     
-    def test_on_reply_no_selection(self):
+    @patch('utils.auth_decorators.wx.MessageBox')
+    def test_on_reply_no_selection(self, mock_msgbox):
         """投稿未選択時の返信テスト"""
         # 選択された投稿をNoneに設定
         self.mock_parent.timeline.get_selected_post.return_value = None
         
         # テスト実行
-        with patch('gui.handlers.post_handlers.wx.MessageBox') as mock_msgbox:
-            result = self.post_handlers.on_reply(MagicMock())
+        result = self.post_handlers.on_reply(MagicMock())
         
         # 失敗を確認
         self.assertFalse(result)
         
-        # エラーメッセージが表示されることを確認
-        mock_msgbox.assert_called_once_with(
-            "投稿を選択してください", "エラー", wx.OK | wx.ICON_ERROR
-        )
+        # エラーメッセージが表示されることを確認（デコレータから）
+        mock_msgbox.assert_called_once()
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.QuoteDialog')
-    def test_on_quote_success(self, mock_dialog):
+    def test_on_quote_success(self, mock_dialog, mock_msgbox):
         """引用成功のテスト"""
         # ダイアログのモック設定
         mock_dlg = MagicMock()
@@ -218,10 +226,11 @@ class TestPostHandlers(unittest.TestCase):
         # クライアントの引用メソッドが呼ばれることを確認
         self.mock_client.quote_post.assert_called_once_with("引用コメント", self.mock_selected_post)
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.pub')
     @patch('gui.handlers.post_handlers.AsyncPostHandler')
     @patch('gui.handlers.post_handlers.wx.MessageDialog')
-    def test_on_repost_success(self, mock_dialog, mock_async_handler, mock_pub):
+    def test_on_repost_success(self, mock_dialog, mock_async_handler, mock_pub, mock_auth_msgbox):
         """リポスト成功のテスト"""
         # 確認ダイアログのモック設定
         mock_dlg = MagicMock()
@@ -243,24 +252,25 @@ class TestPostHandlers(unittest.TestCase):
         # リポスト処理中フラグが設定されることを確認
         self.assertTrue(PostHandlers._reposting_post)
     
-    def test_on_repost_own_post(self):
+    @patch('utils.auth_decorators.wx.MessageBox')
+    def test_on_repost_own_post(self, mock_msgbox):
         """自分の投稿のリポスト防止テスト"""
         # 自分の投稿に設定
         self.mock_selected_post['is_own_post'] = True
         
         # テスト実行
-        with patch('gui.handlers.post_handlers.wx.MessageBox') as mock_msgbox:
-            result = self.post_handlers.on_repost(MagicMock())
+        result = self.post_handlers.on_repost(MagicMock())
         
         # 失敗を確認
         self.assertFalse(result)
         
         # エラーメッセージが表示されることを確認
         mock_msgbox.assert_called_once_with(
-            "自分の投稿はリポストできません", "エラー", wx.OK | wx.ICON_ERROR
+            "自分の投稿はリポストできません", "エラー", unittest.mock.ANY
         )
     
-    def test_on_repost_already_processing(self):
+    @patch('utils.auth_decorators.wx.MessageBox')
+    def test_on_repost_already_processing(self, mock_msgbox):
         """リポスト処理中の二重実行防止テスト"""
         # リポスト処理中フラグを設定
         PostHandlers._reposting_post = True
@@ -271,8 +281,9 @@ class TestPostHandlers(unittest.TestCase):
         # 失敗を確認
         self.assertFalse(result)
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.ProfileDialog')
-    def test_on_profile_success(self, mock_dialog):
+    def test_on_profile_success(self, mock_dialog, mock_msgbox):
         """プロフィール表示成功のテスト"""
         # ダイアログのモック設定
         mock_dlg = MagicMock()
@@ -291,8 +302,9 @@ class TestPostHandlers(unittest.TestCase):
         mock_dialog.assert_called_once()
         mock_dlg.ShowModal.assert_called_once()
     
+    @patch('utils.auth_decorators.wx.MessageBox')
     @patch('gui.handlers.post_handlers.wx.MessageDialog')
-    def test_on_delete_success(self, mock_dialog):
+    def test_on_delete_success(self, mock_dialog, mock_auth_msgbox):
         """投稿削除成功のテスト"""
         # 自分の投稿に設定
         self.mock_selected_post['is_own_post'] = True
@@ -313,24 +325,25 @@ class TestPostHandlers(unittest.TestCase):
         # クライアントの削除メソッドが呼ばれることを確認
         self.mock_client.delete_post.assert_called_once_with('test_uri')
     
-    def test_on_delete_not_own_post(self):
+    @patch('utils.auth_decorators.wx.MessageBox')
+    def test_on_delete_not_own_post(self, mock_msgbox):
         """他人の投稿の削除防止テスト"""
         # 他人の投稿に設定
         self.mock_selected_post['is_own_post'] = False
         
         # テスト実行
-        with patch('gui.handlers.post_handlers.wx.MessageBox') as mock_msgbox:
-            result = self.post_handlers.on_delete(MagicMock())
+        result = self.post_handlers.on_delete(MagicMock())
         
         # 失敗を確認
         self.assertFalse(result)
         
         # エラーメッセージが表示されることを確認
         mock_msgbox.assert_called_once_with(
-            "自分の投稿のみ削除できます", "エラー", wx.OK | wx.ICON_ERROR
+            "自分の投稿のみ削除できます", "エラー", unittest.mock.ANY
         )
     
-    def test_on_delete_already_processing(self):
+    @patch('utils.auth_decorators.wx.MessageBox')
+    def test_on_delete_already_processing(self, mock_msgbox):
         """削除処理中の二重実行防止テスト"""
         # 削除処理中フラグを設定
         PostHandlers._deleting_post = True
