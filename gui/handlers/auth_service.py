@@ -6,62 +6,108 @@ SSky - Blueskyクライアント
 認証サービスモジュール
 """
 
-import wx # LoginDialog のために残す
+import wx # LoginDialog のために必要
 import logging
+import typing
 from pubsub import pub # PyPubSub をインポート
 from atproto_client import Session, SessionEvent # SDK の型をインポート
 
-from gui.dialogs.login_dialog import LoginDialog # show_login_dialog のために残す
+from gui.dialogs.login_dialog import LoginDialog # show_login_dialog のために必要
 from core.auth.auth_manager import AuthManager
-from core.client import BlueskyClient
+from core.client import BlueskyClient, AuthenticationError
 from core import events # 定義したイベント名をインポート
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class AuthService: # クラス名を変更
-    """認証プロセスを管理し、イベントを発行するサービス"""
+class AuthService:
+    """認証プロセスを管理し、イベントを発行するサービス
+    
+    このクラスは以下の責任を持ちます：
+    - 認証プロセスのフロー管理（ログイン、ログアウト、セッション管理）
+    - 認証関連のUI操作（ダイアログ表示など）
+    - 認証イベントの発行と伝播
+    - セッション状態の変更監視
+    
+    セッションの実際の保存と取得はAuthManagerが担当します。
+    """
 
-    def __init__(self, client: BlueskyClient, auth_manager: AuthManager): # parent を削除
-        """初期化"""
+    def __init__(self, client: BlueskyClient, auth_manager: AuthManager):
+        """初期化
+        
+        Args:
+            client (BlueskyClient): Blueskyクライアントインスタンス
+            auth_manager (AuthManager): 認証情報管理インスタンス
+        """
         self.client = client
         self.auth_manager = auth_manager
 
         # SDK のセッション変更イベントを購読
-        # 注意: self.client が atproto_client.Client インスタンスであることを確認
         if hasattr(self.client, 'on_session_change') and callable(self.client.on_session_change):
-             self.client.on_session_change(self._handle_session_change)
-             logger.debug("AuthService initialized and subscribed to session changes.")
+            # 実装されたセッションハンドラを登録
+            self.client.on_session_change(self._handle_session_change)
+            logger.debug("AuthService initialized and subscribed to session changes.")
         else:
-             logger.warning("AuthService: client does not support on_session_change. Session saving might not work automatically.")
+            logger.warning("AuthService: client does not support on_session_change. Session saving might not work automatically.")
 
 
-    def _handle_session_change(self, event: SessionEvent, session: Session):
-        """SDKからのセッション変更イベントを処理"""
+    def _handle_session_change(self, event: SessionEvent, session: Session) -> None:
+        """セッション変更イベントを処理し、セッションの保存や更新を行う
+        
+        Args:
+            event (SessionEvent): セッションイベントの種類
+            session (Session): セッションオブジェクト
+        """
         logger.info(f"Session change event received: {event}")
+        
+        # セッションの作成や更新の場合はセッションを保存
         if event in (SessionEvent.CREATE, SessionEvent.REFRESH):
-            try:
-                # export_session_string が client に存在するか確認
-                if hasattr(self.client, 'export_session_string') and callable(self.client.export_session_string):
-                    session_string = self.client.export_session_string()
-                    if session_string and session and session.did:
-                        logger.debug(f"Saving session for DID: {session.did}")
-                        # AuthManager を介して保存
-                        saved = self.auth_manager.save_session(session.did, session_string)
-                        if saved:
-                            # セッション保存成功イベントを発行
-                            pub.sendMessage(events.AUTH_SESSION_SAVED, did=session.did)
+            self._save_current_session(session)
+    
+    def _save_current_session(self, session: typing.Optional[Session] = None) -> bool:
+        """現在のセッションを保存
+        
+        Args:
+            session (Session, optional): セッションオブジェクト。Noneの場合はクライアントから取得。
+            
+        Returns:
+            bool: 保存に成功した場合はTrue
+        """
+        try:
+            # セッション文字列をエクスポート
+            if hasattr(self.client, 'export_session_string') and callable(self.client.export_session_string):
+                session_string = self.client.export_session_string()
+                user_did = self.client.user_did if hasattr(self.client, 'user_did') else None
+                
+                # セッションが指定されている場合はそちらのDIDを使用
+                if session and hasattr(session, 'did') and session.did:
+                    user_did = session.did
+                    
+                if session_string and user_did:
+                    logger.debug(f"Saving session for DID: {user_did}")
+                    saved = self.auth_manager.save_session(user_did, session_string)
+                    if saved:
+                        # セッション保存成功イベントを発行
+                        pub.sendMessage(events.AUTH_SESSION_SAVED, did=user_did)
+                        return True
                     else:
-                        logger.warning("Could not export session string or DID is missing. Session not saved.")
+                        logger.warning(f"Failed to save session for DID: {user_did}")
                 else:
-                    logger.warning("AuthService: client does not support export_session_string.")
-            except Exception as e:
-                logger.error(f"Error saving session: {e}", exc_info=True)
-        # elif event == SessionEvent.IMPORT: # 必要ならインポートイベントも処理
-        #     pass
+                    logger.warning("Could not export session string or DID is missing. Session not saved.")
+            else:
+                logger.warning("AuthService: client does not support export_session_string.")
+                
+            return False
+        except Exception as e:
+            logger.error(f"Error saving session: {e}", exc_info=True)
+            return False
 
-    def show_login_dialog(self, parent_window):
-        """ログインダイアログを表示し、入力があればログイン処理を試行"""
+    def show_login_dialog(self, parent_window: wx.Window) -> None:
+        """ログインダイアログを表示し、入力があればログイン処理を試行
+        
+        Args:
+            parent_window (wx.Window): 親ウィンドウ
+        """
         # LoginDialog は wx.Dialog を継承しているので parent が必要
         dlg = LoginDialog(parent_window)
         try:
@@ -78,15 +124,26 @@ class AuthService: # クラス名を変更
             dlg.Destroy()
 
 
-    def perform_login(self, username, password):
-        """ユーザー名とパスワードでログインを実行"""
+    def perform_login(self, username: str, password: str) -> bool:
+        """ユーザー名とパスワードでログインを実行
+        
+        Args:
+            username (str): ユーザー名（ハンドル）
+            password (str): パスワードまたはアプリパスワード
+            
+        Returns:
+            bool: ログイン成功時はTrue、失敗時はFalse
+        """
         logger.debug("Attempting login...")
         pub.sendMessage(events.AUTH_LOGIN_ATTEMPT) # ログイン試行イベント
         try:
             # login メソッドが client に存在するか確認
             if hasattr(self.client, 'login') and callable(self.client.login):
-                profile = self.client.login(username, password) # login() の引数名を修正
+                profile = self.client.login(username, password)
                 logger.info(f"Login successful for handle: {profile.handle}")
+                
+                # セッションを保存
+                self._save_current_session()
                 
                 # ログイン成功ダイアログを表示
                 wx.MessageBox(f"{profile.handle}としてログインしました", "ログイン成功", wx.OK | wx.ICON_INFORMATION)
@@ -105,8 +162,14 @@ class AuthService: # クラス名を変更
             pub.sendMessage(events.AUTH_LOGIN_FAILURE, error=e)
             return False
 
-    def perform_logout(self):
-        """ログアウト処理を実行"""
+    def perform_logout(self) -> bool:
+        """ログアウト処理を実行
+        
+        クライアントの状態をリセットし、保存されたセッションを削除します。
+        
+        Returns:
+            bool: ログアウト成功時はTrue、失敗時はFalse
+        """
         # client.me や client.profile など、ログイン中のユーザー情報を取得する方法を確認
         current_profile = getattr(self.client, 'profile', None) # 例: client.profile に情報があると仮定
 
@@ -146,8 +209,16 @@ class AuthService: # クラス名を変更
             pub.sendMessage(events.AUTH_LOGOUT_SUCCESS) # すでにログアウトしている場合も成功として扱う
             return False
 
-    def login_with_session(self, session_string, user_did):
-        """保存されたセッション文字列を使用してログインを試行"""
+    def login_with_session(self, session_string: typing.Union[str, bytes], user_did: str) -> bool:
+        """保存されたセッション文字列を使用してログインを試行
+        
+        Args:
+            session_string (str|bytes): セッション文字列（復号化済み）
+            user_did (str): ユーザーDID
+            
+        Returns:
+            bool: ログイン成功時はTrue、失敗時はFalse
+        """
         logger.debug(f"Attempting login with session for DID: {user_did}")
         pub.sendMessage(events.AUTH_SESSION_LOAD_ATTEMPT, did=user_did)
         try:
@@ -182,8 +253,14 @@ class AuthService: # クラス名を変更
             pub.sendMessage(events.AUTH_SESSION_LOAD_FAILURE, error=e, needs_relogin=True)
             return False
 
-    def load_and_login(self):
-        """保存されたセッションを読み込み、ログインを試行"""
+    def load_and_login(self) -> bool:
+        """保存されたセッションを読み込み、ログインを試行
+        
+        アプリケーション起動時などに自動ログインを試みる際に使用します。
+        
+        Returns:
+            bool: ログイン成功時はTrue、失敗時はFalse
+        """
         logger.debug("Attempting to load session from store...")
         try:
             session_data, user_did = self.auth_manager.load_session() # 変更: load_session は復号化済みデータを返す想定

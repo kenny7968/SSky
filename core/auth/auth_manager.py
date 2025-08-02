@@ -7,6 +7,7 @@ SSky - Blueskyクライアント
 """
 
 import logging
+import typing
 from utils.crypto import encrypt_data, decrypt_data
 from core.data_store import DataStore
 
@@ -14,7 +15,15 @@ from core.data_store import DataStore
 logger = logging.getLogger(__name__)
 
 class AuthManager:
-    """認証情報の管理クラス（シングルトン）"""
+    """認証情報の管理クラス（シングルトン）
+    
+    このクラスは以下の責任を持ちます：
+    - セッション情報の暗号化/復号化
+    - セッション情報の永続的な保存/読み込み/削除
+    - データストアへのアクセス抽象化
+    
+    認証プロセスのフロー管理やUIとの連携はAuthServiceが担当します。
+    """
 
     _instance = None # シングルトンインスタンス
 
@@ -33,12 +42,12 @@ class AuthManager:
         self.data_store = DataStore() # 常に新しいDataStoreを作成（シングルトンなので一度だけ）
         logger.debug("AuthManager initialized with DataStore.") # デバッグログ追加
 
-    def save_session(self, user_did, session_data):
-        """セッション情報を保存
+    def save_session(self, user_did: str, session_data: typing.Union[str, bytes]) -> bool:
+        """セッション情報を暗号化して保存
 
         Args:
             user_did (str): ユーザーのDID
-            session_data (object): セッションデータ
+            session_data (str|bytes): セッションデータ（文字列またはバイト列）
 
         Returns:
             bool: 成功した場合はTrue
@@ -69,11 +78,12 @@ class AuthManager:
             logger.error(f"セッション情報の保存に失敗しました: {str(e)}", exc_info=True)
             return False
 
-    def load_session(self):
-        """セッション情報を読み込み
+    def load_session(self) -> typing.Tuple[typing.Optional[typing.Union[str, bytes]], typing.Optional[str]]:
+        """セッション情報を読み込み、復号化して返す
 
         Returns:
             tuple: (session_data, user_did)のタプル。情報がない場合は(None, None)
+                  session_dataは復号化済みのデータ（通常は文字列）
         """
         try:
             # データストアから最新のセッション情報を取得
@@ -104,14 +114,14 @@ class AuthManager:
             logger.error(f"セッション情報の読み込みに失敗しました: {str(e)}", exc_info=True)
             return None, None
 
-    def delete_session(self, user_did):
+    def delete_session(self, user_did: str) -> bool:
         """セッション情報を削除
 
         Args:
             user_did (str): ユーザーのDID
 
         Returns:
-            bool: 成功した場合はTrue
+            bool: 成功した場合はTrue（存在しなかった場合もTrue）
         """
         try:
             # データストアからセッション情報を削除
@@ -120,7 +130,8 @@ class AuthManager:
                 logger.info(f"セッション情報を削除しました: {user_did}")
             else:
                 logger.warning(f"セッション情報の削除に失敗したか、対象が存在しませんでした: {user_did}")
-            return result # DataStoreの戻り値をそのまま返す
+            # DataStoreの戻り値をそのまま返す（存在しなかった場合もTrueを返す）
+            return result
         except Exception as e:
             logger.error(f"セッション情報の削除に失敗しました: {str(e)}", exc_info=True) # エラー詳細をログに
             return False

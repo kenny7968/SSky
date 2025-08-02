@@ -8,6 +8,7 @@ Blueskyクライアントラッパーモジュール
 
 import logging
 import mimetypes
+import typing
 from atproto import Client as AtprotoClient, SessionEvent, Session
 from atproto.exceptions import AtProtocolError
 from atproto import models
@@ -21,7 +22,16 @@ class AuthenticationError(Exception):
 logger = logging.getLogger(__name__)
 
 class BlueskyClient:
-    """Blueskyクライアントラッパークラス"""
+    """Blueskyクライアントラッパークラス
+    
+    atprotoライブラリをラップし、以下の機能を提供します：
+    - ログイン/ログアウト管理
+    - タイムライン取得
+    - 投稿、いいね、リプライ、リポストなどのアクション
+    - ユーザー関連操作（フォロー、ブロック、ミュートなど）
+    
+    認証関連の処理の一部はAuthServiceと連携して行います。
+    """
     
     def __init__(self):
         """初期化"""
@@ -30,45 +40,31 @@ class BlueskyClient:
         self.is_logged_in = False
         self.user_did = None  # ログインユーザーのDIDを保持
         
-        # データストアの初期化
-        from core.data_store import DataStore
-        self.data_store = DataStore()
+        # セッション変更イベント処理用の外部ハンドラを保持するリスト
+        self._session_change_handlers = []
         
-        # セッション変更イベントのコールバックを登録（デコレータ構文）
-        logger.info("セッション変更イベントのコールバックを登録します（デコレータ構文）")
+        # 内部ハンドラを登録
+        logger.info("セッション変更イベントのコールバック機能を初期化します")
         logger.debug(f"クライアントオブジェクト: {type(self.client)}")
         
         @self.client.on_session_change
-        def handle_session_change(event: SessionEvent, session: Session):
+        def _internal_session_change_handler(event: SessionEvent, session: Session):
             try:
                 # イベントの種類をログに記録
                 logger.info(f"セッション変更イベントが発生しました: {event}")
                 logger.debug(f"セッションオブジェクト: 型={type(session)}")
-                logger.debug(f"セッションオブジェクトの内容: {session}")  # デバッグ目的で内容も出力
                 
-                # REFRESH イベントの場合のみ、セッション情報を保存
-                if event == SessionEvent.REFRESH:
-                    # セッション情報をエクスポート
-                    session_string = self.client.export_session_string()
-                    
-                    if session_string:
-                        # セッション情報を保存
-                        from core.auth.auth_manager import AuthManager
-                        auth_manager = AuthManager()
-                        auth_manager.save_session(self.user_did, session_string)
-                        logger.info(f"セッション変更イベント({event})によりセッション情報を保存しました: {self.user_did}")
-                    else:
-                        if not session_string:
-                            logger.error("セッション情報のエクスポートに失敗しました")
-                        if not self.user_did:
-                            logger.error("ユーザーDIDが設定されていません")
+                # 登録された外部ハンドラを実行
+                for handler in self._session_change_handlers:
+                    try:
+                        handler(event, session)
+                    except Exception as handler_error:
+                        logger.error(f"外部セッションハンドラの実行中にエラーが発生しました: {str(handler_error)}", exc_info=True)
             except Exception as e:
                 logger.error(f"セッション変更イベント処理中にエラーが発生しました: {str(e)}", exc_info=True)
-
-        # インスタンス変数にハンドラを保存（ガベージコレクションを防ぐため）
-        self._session_change_handler = handle_session_change
         
-        logger.info("セッション変更イベントのコールバックを登録しました（デコレータ構文）")
+        # ガベージコレクションが発生しないようにインスタンス変数に保存
+        self._internal_session_change_handler = _internal_session_change_handler
         
     def handle_api_error(self, error, operation_name="API操作"):
         """API呼び出し時のエラーを処理
@@ -96,7 +92,31 @@ class BlueskyClient:
         logger.error(f"{operation_name}中にエラーが発生しました: {str(error)}")
         return False
     
-    def export_session_string(self):
+    def on_session_change(self, handler: typing.Callable[[SessionEvent, Session], None]) -> None:
+        """セッション変更イベントの外部ハンドラを登録
+        
+        Args:
+            handler: セッション変更イベントを処理するコールバック関数
+        """
+        self._session_change_handlers.append(handler)
+        logger.debug(f"外部セッション変更ハンドラが登録されました（合計: {len(self._session_change_handlers)}件）")
+        
+    def remove_session_change_handler(self, handler: typing.Callable[[SessionEvent, Session], None]) -> bool:
+        """登録されたセッション変更イベントのハンドラを削除
+        
+        Args:
+            handler: 削除するハンドラ
+            
+        Returns:
+            bool: 削除に成功した場合はTrue
+        """
+        if handler in self._session_change_handlers:
+            self._session_change_handlers.remove(handler)
+            logger.debug(f"外部セッション変更ハンドラが削除されました（合計: {len(self._session_change_handlers)}件）")
+            return True
+        return False
+    
+    def export_session_string(self) -> typing.Optional[str]:
         """セッション情報を文字列としてエクスポート
         
         Returns:
@@ -117,7 +137,7 @@ class BlueskyClient:
             logger.error(f"セッション情報のエクスポートに失敗しました: {str(e)}", exc_info=True)
             return None
     
-    def login_with_session(self, session_string):
+    def login_with_session(self, session_string: typing.Union[str, bytes]):
         """セッション情報を使用してログイン
         
         Args:
@@ -168,7 +188,7 @@ class BlueskyClient:
             self.profile = None
             raise AuthenticationError("セッションが無効になりました。再ログインが必要です。") from e
     
-    def login(self, username, password):
+    def login(self, username: str, password: str):
         """Blueskyにログイン
         
         Args:
@@ -197,13 +217,9 @@ class BlueskyClient:
             # ログイン状態を更新
             self.is_logged_in = True
             
-            # ログイン成功後にセッション情報を保存
-            session_string = self.export_session_string()
-            if session_string and self.user_did:
-                from core.auth.auth_manager import AuthManager
-                auth_manager = AuthManager()
-                auth_manager.save_session(self.user_did, session_string)
-                logger.info(f"ログイン成功時にセッション情報を保存しました: {self.user_did}")
+            # ログイン成功後にセッション情報を取得できるようにする
+            # 実際のセッション保存は AuthService の _handle_session_change で行われる
+            # または AuthService の perform_login によって呼び出される
             
             return self.profile
             
@@ -217,7 +233,7 @@ class BlueskyClient:
             self.is_logged_in = False
             raise
             
-    def logout(self):
+    def logout(self) -> bool:
         """ログアウト処理
         
         Returns:
