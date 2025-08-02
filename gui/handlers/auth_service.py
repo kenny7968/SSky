@@ -14,7 +14,8 @@ from atproto_client import Session, SessionEvent # SDK の型をインポート
 
 from gui.dialogs.login_dialog import LoginDialog # show_login_dialog のために必要
 from core.auth.auth_manager import AuthManager
-from core.client import BlueskyClient, AuthenticationError
+from core.client import BlueskyClient
+from core.exceptions import AuthenticationError
 from core import events # 定義したイベント名をインポート
 
 # ロガーの設定

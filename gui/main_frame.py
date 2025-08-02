@@ -9,7 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import logging
 from pubsub import pub  # PubSub をインポート
-from gui.timeline_view import TimelineView
+from gui.timeline.timeline_view import TimelineView
 from gui.handlers.auth_service import AuthService
 from gui.handlers.post_handlers import PostHandlers
 from core.client import BlueskyClient
