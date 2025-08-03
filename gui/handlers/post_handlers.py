@@ -713,10 +713,14 @@ class PostHandlers:
                     status_bar=getattr(self.parent, 'statusbar', None)
                 )
                 
-                # タイムラインを2秒後に更新
+                # ローカルリストから即座に削除
+                if hasattr(self.parent, 'timeline'):
+                    self.parent.timeline.remove_post_by_uri(selected['uri'])
+                
+                # タイムラインを5秒後に更新（サーバーとの同期確認）
                 if hasattr(self.parent, 'timeline'):
                     from utils.async_utils import run_delayed
-                    run_delayed(self.parent.timeline.fetch_timeline, 2, self.client)
+                    run_delayed(self.parent.timeline.fetch_timeline, 5, self.client)
                     
                 return True
                 

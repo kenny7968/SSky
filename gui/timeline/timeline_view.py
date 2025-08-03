@@ -297,6 +297,17 @@ class TimelineView(wx.Panel):
         """
         self.list_ctrl.on_open_url(event)
     
+    def remove_post_by_uri(self, uri):
+        """URIから投稿を削除
+        
+        Args:
+            uri (str): 削除する投稿のURI
+            
+        Returns:
+            bool: 削除に成功した場合はTrue
+        """
+        return self.list_ctrl.remove_post_by_uri(uri)
+    
     def load_settings(self):
         """設定から自動取得の設定を読み込む"""
         auto_fetch = self.settings_manager.get('timeline.auto_fetch', True)

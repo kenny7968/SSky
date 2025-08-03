@@ -127,7 +127,7 @@ class BlueskyApiClient:
         """投稿を削除
         
         Args:
-            uri (str): 投稿のURI
+            uri (str): 投稿のURI (例: at://did:plc:xxxxx/app.bsky.feed.post/yyyyy)
             
         Returns:
             object: 削除結果
@@ -138,11 +138,34 @@ class BlueskyApiClient:
         """
         logger.info(f"投稿を削除しています: {uri}")
         
-        # 投稿を削除
-        result = self.client.delete_post(uri)
-        
-        logger.info("投稿の削除が完了しました")
-        return result
+        try:
+            # URIを解析して必要な要素を抽出
+            # URI形式: at://did:plc:xxxxx/app.bsky.feed.post/yyyyy
+            uri_parts = uri.split('/')
+            logger.debug(f"URI parts: {uri_parts}")
+            
+            if len(uri_parts) < 5:
+                raise ValueError(f"無効なURI形式です（パーツ数: {len(uri_parts)}）: {uri}")
+            
+            repo = uri_parts[2]  # did:plc:xxxxx
+            collection = uri_parts[3]  # app.bsky.feed.post
+            rkey = uri_parts[4]  # yyyyy
+            
+            logger.info(f"削除対象 - repo: {repo}, collection: {collection}, rkey: {rkey}")
+            
+            # レコードを削除
+            result = self.client.com.atproto.repo.delete_record(data={
+                'repo': repo,
+                'collection': collection,
+                'rkey': rkey
+            })
+            
+            logger.info("投稿の削除が完了しました")
+            return result
+            
+        except Exception as e:
+            logger.error(f"投稿削除エラー: {str(e)}")
+            raise
             
     def reply_to_post(self, text, reply_to):
         """投稿に返信

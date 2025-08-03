@@ -438,3 +438,51 @@ class TimelineListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
             logger.debug(f"投稿を選択しました: index={index}, uri={uri}")
             return True
         return False
+    
+    def remove_post_by_uri(self, uri):
+        """URIから投稿を削除
+        
+        Args:
+            uri (str): 削除する投稿のURI
+            
+        Returns:
+            bool: 削除に成功した場合はTrue
+        """
+        if not uri:
+            return False
+            
+        index = self.find_post_by_uri(uri)
+        if index >= 0:
+            # ローカルリストから削除
+            del self.posts[index]
+            self.post_count = len(self.posts)
+            
+            # UIから削除
+            self.DeleteItem(index)
+            
+            # 選択状態を調整
+            if self.selected_index == index:
+                # 削除された項目が選択されていた場合
+                if index < self.post_count:
+                    # 次の項目を選択
+                    self.Select(index)
+                    self.selected_index = index
+                elif self.post_count > 0:
+                    # 最後の項目を選択
+                    self.Select(self.post_count - 1)
+                    self.selected_index = self.post_count - 1
+                else:
+                    # リストが空になった場合
+                    self.selected_index = -1
+            elif self.selected_index > index:
+                # 削除された項目より後ろが選択されていた場合はインデックスを調整
+                self.selected_index -= 1
+            
+            # 再描画
+            self.Refresh()
+            
+            logger.info(f"投稿を削除しました: uri={uri}")
+            return True
+        
+        logger.debug(f"削除対象の投稿が見つかりませんでした: uri={uri}")
+        return False
