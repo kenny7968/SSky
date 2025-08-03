@@ -9,11 +9,12 @@ SSky - Blueskyクライアント
 import wx
 import logging
 import weakref
+from .base_dialog import BaseDialog
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class ProfileDialog(wx.Dialog):
+class ProfileDialog(BaseDialog):
     """投稿者プロフィールダイアログ"""
     
     def __init__(self, parent, profile_data):
@@ -26,8 +27,7 @@ class ProfileDialog(wx.Dialog):
         super(ProfileDialog, self).__init__(
             parent, 
             title=f"{profile_data.display_name or profile_data.handle}のプロフィール",
-            size=(500, 400),
-            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+            size=(500, 400)
         )
         
         self.profile_data = profile_data

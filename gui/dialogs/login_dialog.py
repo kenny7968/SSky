@@ -8,11 +8,12 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+from .base_dialog import BaseDialog
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class LoginDialog(wx.Dialog):
+class LoginDialog(BaseDialog):
     """ログイン情報設定ダイアログ"""
     
     def __init__(self, parent):
@@ -24,15 +25,11 @@ class LoginDialog(wx.Dialog):
         super(LoginDialog, self).__init__(
             parent, 
             title="Blueskyにログイン", 
-            size=(400, 200),
-            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+            size=(400, 200)
         )
         
         # UIの初期化
         self.init_ui()
-        
-        # 中央に配置
-        self.Centre()
         
     def init_ui(self):
         """UIの初期化"""

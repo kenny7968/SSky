@@ -11,11 +11,12 @@ import logging
 import weakref
 from utils.url_utils import extract_urls, open_url, handle_urls_in_text, extract_urls_from_facets
 from utils.time_format import format_timestamp_to_jst
+from .base_dialog import BaseDialog
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class PostDetailDialog(wx.Dialog):
+class PostDetailDialog(BaseDialog):
     """投稿詳細ダイアログ"""
     
     def __init__(self, parent, post_data):
@@ -28,8 +29,7 @@ class PostDetailDialog(wx.Dialog):
         super(PostDetailDialog, self).__init__(
             parent, 
             title=f"{post_data['username']}の投稿",
-            size=(500, 300),
-            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+            size=(500, 300)
         )
         
         self.post_data = post_data

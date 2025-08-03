@@ -8,11 +8,12 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+from .base_dialog import BaseDialog
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-class SettingsDialog(wx.Dialog):
+class SettingsDialog(BaseDialog):
     """設定ダイアログクラス"""
     
     def __init__(self, parent):
@@ -24,8 +25,7 @@ class SettingsDialog(wx.Dialog):
         super().__init__(
             parent,
             title="設定",
-            size=(500, 400),
-            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
+            size=(500, 400)
         )
         
         # ダイアログが破棄中かどうかを示すフラグ
