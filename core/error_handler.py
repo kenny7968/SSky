@@ -271,6 +271,31 @@ class UnifiedErrorHandler:
             status_bar.SetStatusText(message)
     
     @staticmethod
+    def update_status_bar(
+        status_bar: typing.Optional[typing.Any],
+        message: str,
+        success: bool = True
+    ) -> None:
+        """ステータスバーの更新
+        
+        Args:
+            status_bar: ステータスバーオブジェクト
+            message: 表示するメッセージ
+            success: 成功かどうか
+        """
+        try:
+            if status_bar and hasattr(status_bar, 'SetStatusText'):
+                status_bar.SetStatusText(message)
+                if success:
+                    logger.debug(f"ステータスバー更新: {message}")
+                else:
+                    logger.warning(f"ステータスバー更新（エラー）: {message}")
+            else:
+                logger.debug(f"ステータスバーが利用できません（メッセージ: {message}）")
+        except Exception as e:
+            logger.warning(f"ステータスバーの更新に失敗しました: {str(e)}")
+    
+    @staticmethod
     def _show_error_dialog(
         message: str,
         title: str,

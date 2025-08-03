@@ -44,6 +44,10 @@ class SettingsManager:
         
         # デフォルト設定
         self.default_settings = {
+            "window_size": {
+                "width": 800,              # ウィンドウ幅
+                "height": 600             # ウィンドウ高さ
+            },
             "timeline": {
                 "auto_fetch": True,        # 投稿一覧を自動取得する
                 "fetch_interval": 600,     # 自動取得の間隔（秒）

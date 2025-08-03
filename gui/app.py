@@ -9,7 +9,8 @@ SSky - Blueskyクライアント
 import wx
 import logging
 from gui.main_frame import MainFrame
-from config.app_config import AppConfig
+from config.app_constants import get_app_name
+from config.settings_manager import SettingsManager
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -19,25 +20,21 @@ class SSkyApp(wx.App):
     
     def __init__(self):
         """初期化"""
-        # 設定の読み込み
-        self.config = AppConfig()
-        
         # 設定マネージャーの初期化（シングルトン）
-        from config.settings_manager import SettingsManager
         self.settings_manager = SettingsManager()
         
         super(SSkyApp, self).__init__()
         
     def OnInit(self):
         """アプリケーション初期化"""
-        # ウィンドウサイズの取得
-        width = self.config.get('window_size.width', 800)
-        height = self.config.get('window_size.height', 600)
+        # ウィンドウサイズの取得（設定から）
+        width = self.settings_manager.get('window_size.width', 800)
+        height = self.settings_manager.get('window_size.height', 600)
         
         # メインフレームの作成
         self.frame = MainFrame(
             None, 
-            title=self.config.get('app_name', 'SSky'),
+            title=get_app_name(),  # 定数から取得
             size=(width, height)
         )
         
