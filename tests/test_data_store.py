@@ -16,7 +16,7 @@ from datetime import datetime
 # プロジェクトのルートディレクトリをパスに追加
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.data_store import DataStore
+from core.data_store import DataStore, MigrationManager
 
 class TestDataStore(unittest.TestCase):
     """データストアのテストクラス"""
@@ -61,22 +61,20 @@ class TestDataStore(unittest.TestCase):
         self.assertTrue(os.path.exists(self.db_path))
         
         # テーブルが作成されたことを確認
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # sessionsテーブルの確認
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
-        self.assertIsNotNone(cursor.fetchone())
-        
-        # usersテーブルの確認
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
-        self.assertIsNotNone(cursor.fetchone())
-        
-        # db_versionテーブルの確認
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
-        self.assertIsNotNone(cursor.fetchone())
-        
-        conn.close()
+        with self.data_store.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # sessionsテーブルの確認
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
+            self.assertIsNotNone(cursor.fetchone())
+            
+            # usersテーブルの確認
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+            self.assertIsNotNone(cursor.fetchone())
+            
+            # db_versionテーブルの確認
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+            self.assertIsNotNone(cursor.fetchone())
     
     
     def test_save_and_load_session(self):
@@ -169,35 +167,90 @@ class TestDataStore(unittest.TestCase):
         # 初回セッション保存
         user_did = 'did:plc:test_user'
         encrypted_session1 = b'encrypted_session1'
-        self.data_store.save_session(user_did, encrypted_session1)
+        result1 = self.data_store.save_session(user_did, encrypted_session1)
+        self.assertTrue(result1)
         
         # 同じユーザーで新しいセッションを保存
         encrypted_session2 = b'encrypted_session2'
-        self.data_store.save_session(user_did, encrypted_session2)
+        result2 = self.data_store.save_session(user_did, encrypted_session2)
+        self.assertTrue(result2)
         
         # 新しいセッションが取得されることを確認
         loaded_session = self.data_store.load_session(user_did)
         self.assertEqual(loaded_session, encrypted_session2)
+        
+        # 古いセッションが上書きされていることを確認
+        self.assertNotEqual(loaded_session, encrypted_session1)
     
     def test_database_migration(self):
         """データベースマイグレーションのテスト"""
         # データベースを初期化（すでにセットアップで実行済み）
         # マイグレーションが正常に完了していることを確認
         
-        # db_versionテーブルが存在することを確認
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        with self.data_store.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # db_versionテーブルが存在することを確認
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+            self.assertIsNotNone(cursor.fetchone())
+            
+            # バージョン情報が正しく設定されていることを確認
+            cursor.execute("SELECT version FROM db_version ORDER BY id DESC LIMIT 1")
+            result = cursor.fetchone()
+            self.assertIsNotNone(result)
+            self.assertEqual(result[0], 1)
+    
+    def test_migration_manager(self):
+        """マイグレーションマネージャーのテスト"""
+        # 新しいテスト用DBでマイグレーションマネージャーをテスト
+        test_db_path = os.path.join(self.temp_dir, 'test_migration.db')
+        migration_manager = MigrationManager(test_db_path)
         
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
-        self.assertIsNotNone(cursor.fetchone())
+        with sqlite3.connect(test_db_path) as conn:
+            cursor = conn.cursor()
+            
+            # バージョンテーブル作成テスト
+            migration_manager.create_version_table(cursor)
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='db_version'")
+            self.assertIsNotNone(cursor.fetchone())
+            
+            # バージョン取得テスト
+            current_version = migration_manager.get_current_version(cursor)
+            self.assertEqual(current_version, 0)
+            
+            # バージョン更新テスト
+            migration_manager.update_version(cursor, 1)
+            updated_version = migration_manager.get_current_version(cursor)
+            self.assertEqual(updated_version, 1)
+    
+    def test_connection_context_manager(self):
+        """データベース接続コンテキストマネージャーのテスト"""
+        # 正常な接続テスト
+        with self.data_store.get_connection() as conn:
+            self.assertIsNotNone(conn)
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            result = cursor.fetchone()
+            self.assertEqual(result[0], 1)
+    
+    def test_transaction_context_manager(self):
+        """トランザクションコンテキストマネージャーのテスト"""
+        user_did = 'did:plc:test_transaction'
         
-        # バージョン情報が正しく設定されていることを確認
-        cursor.execute("SELECT version FROM db_version ORDER BY id DESC LIMIT 1")
-        result = cursor.fetchone()
-        self.assertIsNotNone(result)
-        self.assertEqual(result[0], 1)
+        # 正常なトランザクションテスト
+        with self.data_store.get_transaction() as cursor:
+            cursor.execute(
+                "INSERT INTO users (did, created_at, updated_at) VALUES (?, ?, ?)",
+                (user_did, datetime.now().isoformat(), datetime.now().isoformat())
+            )
         
-        conn.close()
+        # データがコミットされていることを確認
+        with self.data_store.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT did FROM users WHERE did = ?", (user_did,))
+            result = cursor.fetchone()
+            self.assertIsNotNone(result)
+            self.assertEqual(result[0], user_did)
 
 if __name__ == '__main__':
     unittest.main()
