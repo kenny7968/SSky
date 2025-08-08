@@ -9,19 +9,22 @@ SSky - Blueskyクライアント
 import functools
 import wx
 import logging
+from typing import Callable, Any, TypeVar, cast
+
+F = TypeVar('F', bound=Callable[..., Any])
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-def require_authentication(error_message="この操作にはログインが必要です", return_value=False):
+def require_authentication(error_message: str = "この操作にはログインが必要です", return_value: Any = False) -> Callable[[F], F]:
     """認証が必要な操作のデコレータ
     
     Args:
-        error_message (str, optional): 認証エラー時のメッセージ
+        error_message (str): 認証エラー時のメッセージ
         return_value: 認証失敗時の戻り値
         
     Returns:
-        function: デコレートされた関数
+        Callable[[F], F]: デコレートされた関数
         
     Example:
         @require_authentication()

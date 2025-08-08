@@ -9,11 +9,12 @@ SSky - Blueskyクライアント
 import os
 import logging
 import mimetypes
+from typing import Optional, Tuple, Any
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-def ensure_directory_exists(directory_path):
+def ensure_directory_exists(directory_path: str) -> bool:
     """ディレクトリが存在することを確認し、存在しない場合は作成する
     
     Args:
@@ -31,7 +32,7 @@ def ensure_directory_exists(directory_path):
         logger.error(f"ディレクトリの作成に失敗しました: {str(e)}")
         return False
 
-def get_mime_type(file_path):
+def get_mime_type(file_path: str) -> str:
     """ファイルのMIMEタイプを取得する
     
     Args:
@@ -45,14 +46,14 @@ def get_mime_type(file_path):
         mime_type = 'application/octet-stream'
     return mime_type
 
-def read_binary_file(file_path):
+def read_binary_file(file_path: str) -> Optional[bytes]:
     """バイナリファイルを読み込む
     
     Args:
         file_path (str): 読み込むファイルのパス
         
     Returns:
-        bytes: ファイルの内容。エラーの場合はNone
+        Optional[bytes]: ファイルの内容。エラーの場合はNone
     """
     try:
         with open(file_path, 'rb') as f:
@@ -61,7 +62,7 @@ def read_binary_file(file_path):
         logger.error(f"ファイルの読み込みに失敗しました: {str(e)}")
         return None
 
-def get_file_size(file_path):
+def get_file_size(file_path: str) -> int:
     """ファイルサイズを取得する
     
     Args:

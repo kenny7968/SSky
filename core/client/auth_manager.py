@@ -8,6 +8,7 @@ Bluesky認証処理専門クラス（リファクタリング版）
 
 import logging
 import typing
+from typing import Optional, Dict, Any, Union
 from atproto import Client as AtprotoClient
 from atproto.exceptions import AtProtocolError
 from core.exceptions import AuthenticationError
@@ -37,7 +38,7 @@ class BlueskyAuthManager:
         self.is_logged_in = False
         self.user_did = None  # ログインユーザーのDIDを保持
         
-    def login(self, username: str, password: str):
+    def login(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Blueskyにログイン
         
         Args:
@@ -45,7 +46,7 @@ class BlueskyAuthManager:
             password (str): アプリパスワード
             
         Returns:
-            object: プロフィール情報。ログイン失敗時は例外が発生
+            Optional[Dict[str, Any]]: プロフィール情報。ログイン失敗時は例外が発生
             
         Raises:
             AtProtocolError: ログイン失敗時
@@ -78,14 +79,14 @@ class BlueskyAuthManager:
             self.is_logged_in = False
             raise
             
-    def login_with_session(self, session_string: typing.Union[str, bytes]):
+    def login_with_session(self, session_string: str) -> Optional[Dict[str, Any]]:
         """セッション情報を使用してログイン
         
         Args:
             session_string (str): セッション情報の文字列
             
         Returns:
-            object: プロフィール情報。ログイン失敗時は例外が発生
+            Optional[Dict[str, Any]]: プロフィール情報。ログイン失敗時は例外が発生
             
         Raises:
             AuthenticationError: セッションが無効な場合
@@ -148,7 +149,7 @@ class BlueskyAuthManager:
             logger.error(f"ログアウト処理中に例外が発生しました: {str(e)}")
             return False
     
-    def export_session_string(self) -> typing.Optional[str]:
+    def export_session_string(self) -> Optional[str]:
         """セッション情報を文字列としてエクスポート
         
         Returns:
@@ -168,7 +169,7 @@ class BlueskyAuthManager:
             logger.error(f"セッション情報のエクスポートに失敗しました: {str(e)}", exc_info=True)
             return None
     
-    def is_authentication_error(self, error) -> bool:
+    def is_authentication_error(self, error: Exception) -> bool:
         """エラーが認証関連かどうかを判定
         
         Args:
@@ -185,7 +186,7 @@ class BlueskyAuthManager:
                    "invalid_token" in error_str)
         return False
     
-    def handle_authentication_error(self, error, operation_name="API操作"):
+    def handle_authentication_error(self, error: Exception, operation_name: str = "API操作") -> bool:
         """認証エラーを処理してログイン状態をリセット
         
         Args:

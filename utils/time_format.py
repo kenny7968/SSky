@@ -8,11 +8,12 @@ SSky - Blueskyクライアント
 
 import logging
 from datetime import datetime, timezone, timedelta
+from typing import Union, Optional
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-def format_timestamp_to_jst(timestamp):
+def format_timestamp_to_jst(timestamp: Union[str, datetime]) -> str:
     """UTCタイムスタンプを日本時間（JST）の 'yyyy/mm/dd hh:mm' 形式に変換
     
     Args:
@@ -39,7 +40,7 @@ def format_timestamp_to_jst(timestamp):
         logger.error(f"時間フォーマットに失敗しました: {str(e)}")
         return "不明"
 
-def format_relative_time(timestamp):
+def format_relative_time(timestamp: Union[str, datetime]) -> str:
     """タイムスタンプを表示用の相対時間文字列に変換
     
     Args:

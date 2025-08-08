@@ -8,6 +8,7 @@ SSky - Blueskyクライアント
 
 import logging
 import typing
+from typing import Optional, Dict, Any, List, Callable, Union
 from atproto import SessionEvent, Session
 from atproto.exceptions import AtProtocolError
 from core.exceptions import AuthenticationError
@@ -78,7 +79,7 @@ class BlueskyClient:
         self.auth_manager.user_did = value
     
     # セッション変更イベント関連のメソッド
-    def on_session_change(self, handler: typing.Callable[[SessionEvent, Session], None]) -> None:
+    def on_session_change(self, handler: Callable[[SessionEvent, Session], None]) -> None:
         """セッション変更イベントのハンドラを登録
         
         Args:
@@ -86,7 +87,7 @@ class BlueskyClient:
         """
         return self.session_manager.on_session_change(handler)
     
-    def remove_session_change_handler(self, handler: typing.Callable[[SessionEvent, Session], None]) -> bool:
+    def remove_session_change_handler(self, handler: Callable[[SessionEvent, Session], None]) -> bool:
         """登録されたセッション変更イベントのハンドラを削除
         
         Args:
@@ -98,7 +99,7 @@ class BlueskyClient:
         return self.session_manager.remove_session_change_handler(handler)
     
     # 認証関連のメソッド
-    def login(self, username: str, password: str):
+    def login(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Blueskyにログイン
         
         Args:
@@ -106,18 +107,18 @@ class BlueskyClient:
             password (str): アプリパスワード
             
         Returns:
-            object: プロフィール情報
+            Optional[Dict[str, Any]]: プロフィール情報
         """
         return self.auth_manager.login(username, password)
     
-    def login_with_session(self, session_string: typing.Union[str, bytes]):
+    def login_with_session(self, session_string: str) -> Optional[Dict[str, Any]]:
         """セッション情報を使用してログイン
         
         Args:
             session_string (str): セッション情報の文字列
             
         Returns:
-            object: プロフィール情報
+            Optional[Dict[str, Any]]: プロフィール情報
         """
         return self.auth_manager.login_with_session(session_string)
     
@@ -129,7 +130,7 @@ class BlueskyClient:
         """
         return self.auth_manager.logout()
     
-    def export_session_string(self) -> typing.Optional[str]:
+    def export_session_string(self) -> Optional[str]:
         """セッション情報を文字列としてエクスポート
         
         Returns:
@@ -137,7 +138,7 @@ class BlueskyClient:
         """
         return self.auth_manager.export_session_string()
     
-    def handle_api_error(self, error, operation_name="API操作"):
+    def handle_api_error(self, error: Exception, operation_name: str = "API操作") -> bool:
         """API呼び出し時のエラーを処理
         
         Args:
@@ -150,14 +151,14 @@ class BlueskyClient:
         return self.auth_manager.handle_api_error(error, operation_name)
     
     # タイムライン関連のメソッド
-    def get_timeline(self, limit=50):
+    def get_timeline(self, limit: int = 50) -> Optional[Dict[str, Any]]:
         """タイムラインを取得
         
         Args:
             limit (int): 取得する投稿数
             
         Returns:
-            object: タイムラインデータ
+            Optional[Dict[str, Any]]: タイムラインデータ
             
         Raises:
             AuthenticationError: 認証エラーの場合
@@ -184,15 +185,15 @@ class BlueskyClient:
             raise
     
     # 投稿関連のメソッド
-    def send_post(self, text, images=None):
+    def send_post(self, text: str, images: Optional[List[Any]] = None) -> Optional[Dict[str, Any]]:
         """投稿を送信
         
         Args:
             text (str): 投稿内容
-            images (list, optional): 画像ブロブのリスト
+            images (Optional[List[Any]]): 画像ブロブのリスト
             
         Returns:
-            object: 投稿結果
+            Optional[Dict[str, Any]]: 投稿結果
         """
         if not self.is_logged_in:
             logger.error("投稿に失敗しました: ログインしていません")
@@ -209,15 +210,15 @@ class BlueskyClient:
             logger.error(f"投稿中に例外が発生しました: {str(e)}", exc_info=True)
             raise
     
-    def upload_blob(self, file_data, mime_type=None):
+    def upload_blob(self, file_data: bytes, mime_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """ファイルをアップロード
         
         Args:
             file_data (bytes): ファイルデータ
-            mime_type (str, optional): MIMEタイプ
+            mime_type (Optional[str]): MIMEタイプ
             
         Returns:
-            object: アップロード結果
+            Optional[Dict[str, Any]]: アップロード結果
         """
         if not self.is_logged_in:
             logger.error("ファイルのアップロードに失敗しました: ログインしていません")
@@ -225,7 +226,7 @@ class BlueskyClient:
             
         return self.api_client.upload_blob(file_data, mime_type)
     
-    def like(self, uri, cid):
+    def like(self, uri: str, cid: str) -> Optional[Dict[str, Any]]:
         """投稿にいいねする
         
         Args:

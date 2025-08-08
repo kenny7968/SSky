@@ -8,6 +8,7 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+from typing import Optional
 from gui.main_frame import MainFrame
 from config.app_constants import get_app_name
 from config.settings_manager import SettingsManager
@@ -25,7 +26,7 @@ class SSkyApp(wx.App):
         
         super(SSkyApp, self).__init__()
         
-    def OnInit(self):
+    def OnInit(self) -> bool:
         """アプリケーション初期化"""
         # ウィンドウサイズの取得（設定から）
         width = self.settings_manager.get('window_size.width', 800)

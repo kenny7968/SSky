@@ -11,7 +11,7 @@ import sqlite3
 import logging
 from datetime import datetime
 from contextlib import contextmanager
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple, Any, List, Dict, Union
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class MigrationManager:
         self.current_version = 0
         self.target_version = 1  # 現在の最新バージョン
     
-    def get_current_version(self, cursor) -> int:
+    def get_current_version(self, cursor: Any) -> int:
         """現在のデータベースバージョンを取得"""
         try:
             cursor.execute("SELECT version FROM db_version ORDER BY id DESC LIMIT 1")
@@ -94,7 +94,7 @@ class MigrationManager:
             logger.error(f"バージョン1へのマイグレーションに失敗しました: {str(e)}")
             raise
     
-    def _migrate_old_sessions_table(self, cursor):
+    def _migrate_old_sessions_table(self, cursor: Any) -> None:
         """古い形式のsessionsテーブルからの移行"""
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
         if cursor.fetchone():
@@ -135,7 +135,7 @@ class MigrationManager:
                 cursor.execute("DROP TABLE old_sessions")
                 logger.info("古いデータを新しいテーブル構造に移行しました")
     
-    def run_migrations(self, cursor) -> bool:
+    def run_migrations(self, cursor: Any) -> bool:
         """必要なマイグレーションを実行"""
         try:
             self.create_version_table(cursor)

@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx # LoginDialog のために必要
 import logging
 import typing
+from typing import Optional, Dict, Any, Union
 from pubsub import pub # PyPubSub をインポート
 from atproto_client import Session, SessionEvent # SDK の型をインポート
 
@@ -63,7 +64,7 @@ class AuthService:
         if event in (SessionEvent.CREATE, SessionEvent.REFRESH):
             self._save_current_session(session)
     
-    def _save_current_session(self, session: typing.Optional[Session] = None) -> bool:
+    def _save_current_session(self, session: Optional[Session] = None) -> bool:
         """現在のセッションを保存
         
         Args:
@@ -208,7 +209,7 @@ class AuthService:
             pub.sendMessage(events.AUTH_LOGOUT_SUCCESS) # すでにログアウトしている場合も成功として扱う
             return False
 
-    def login_with_session(self, session_string: typing.Union[str, bytes], user_did: str) -> bool:
+    def login_with_session(self, session_string: str, user_did: str) -> bool:
         """保存されたセッション文字列を使用してログインを試行
         
         Args:

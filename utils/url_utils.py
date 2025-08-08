@@ -10,6 +10,7 @@ import re
 import wx
 import webbrowser
 import logging
+from typing import List, Optional, Any
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -18,14 +19,14 @@ logger = logging.getLogger(__name__)
 # https://から始まるURLと、www.から始まるURLの両方を検出
 URL_PATTERN = r'(?:https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w%!./?=&#+]*)*)|(?:www\.(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w%!./?=&#+]*)*)'
 
-def extract_urls(text):
+def extract_urls(text: str) -> List[str]:
     """テキストからURLを抽出する
     
     Args:
         text (str): 対象テキスト
         
     Returns:
-        list: 抽出されたURLのリスト
+        List[str]: 抽出されたURLのリスト
     """
     if not text:
         return []
@@ -34,7 +35,7 @@ def extract_urls(text):
     urls = re.findall(URL_PATTERN, text)
     return urls
 
-def open_url(url):
+def open_url(url: str) -> bool:
     """URLをデフォルトブラウザで開く
     
     Args:
@@ -56,11 +57,11 @@ def open_url(url):
         wx.MessageBox(f"URLを開けませんでした: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
         return False
 
-def extract_urls_from_facets(facets):
+def extract_urls_from_facets(facets: List[Any]) -> List[str]:
     """facetsからURLを抽出する
     
     Args:
-        facets (list): facetsリスト
+        facets (List[Any]): facetsリスト
         
     Returns:
         list: 抽出されたURLのリスト
@@ -90,13 +91,13 @@ def extract_urls_from_facets(facets):
     
     return urls
 
-def handle_urls_in_text(text, parent=None, facets=None):
+def handle_urls_in_text(text: str, parent: Optional[Any] = None, facets: Optional[List[Any]] = None) -> bool:
     """テキスト内のURLを処理し、必要に応じてブラウザで開く
     
     Args:
         text (str): 対象テキスト
-        parent (wx.Window, optional): 親ウィンドウ
-        facets (list, optional): facetsリスト
+        parent (Optional[Any]): 親ウィンドウ
+        facets (Optional[List[Any]]): facetsリスト
         
     Returns:
         bool: URLが開かれた場合はTrue

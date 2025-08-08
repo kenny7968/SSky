@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import logging
 import time
+from typing import Optional, List, Dict, Any
 from utils.time_format import format_relative_time
 from gui.timeline.list_ctrl import TimelineListCtrl
 from gui.timeline.data_manager import TimelineDataManager
@@ -24,7 +25,7 @@ TIME_UPDATE_TIMER_ID = 1001
 class TimelineView(wx.Panel):
     """タイムラインビュークラス"""
     
-    def __init__(self, parent):
+    def __init__(self, parent: wx.Window) -> None:
         """初期化
         
         Args:
