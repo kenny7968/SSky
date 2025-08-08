@@ -17,6 +17,7 @@ from core.auth.credential_manager import AuthCredentialManager
 from core import events # イベント名をインポート
 from atproto_client.models.app.bsky.actor.defs import ProfileViewDetailed # 型ヒント用
 from utils.auth_decorators import require_authentication
+from utils.i18n import get_i18n
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -99,46 +100,47 @@ class MainFrame(wx.Frame):
     def create_menu_bar(self):
         """メニューバーの作成"""
         menubar = wx.MenuBar()
+        i18n = get_i18n()
         
         # アプリメニュー
         app_menu = wx.Menu()
-        self.login_item = app_menu.Append(wx.ID_ANY, "Blueskyにログイン(&A)", "Blueskyにログイン")
-        self.logout_item = app_menu.Append(wx.ID_ANY, "ログアウト(&L)", "Blueskyからログアウト")
+        self.login_item = app_menu.Append(wx.ID_ANY, i18n.get_message("menu.login"), i18n.get_message("menu_help.login"))
+        self.logout_item = app_menu.Append(wx.ID_ANY, i18n.get_message("menu.logout"), i18n.get_message("menu_help.logout"))
         self.logout_item.Enable(False)  # 初期状態では無効
         app_menu.AppendSeparator()  # 区切り線
-        reset_db_item = app_menu.Append(wx.ID_ANY, "データベースをリセット(&R)", "データベースをリセットして再初期化")
+        reset_db_item = app_menu.Append(wx.ID_ANY, i18n.get_message("menu.reset_database"), i18n.get_message("menu_help.reset_database"))
         app_menu.AppendSeparator()  # 区切り線
-        exit_item = app_menu.Append(wx.ID_EXIT, "終了(&X)", "アプリケーションを終了")
+        exit_item = app_menu.Append(wx.ID_EXIT, i18n.get_message("menu.exit"), i18n.get_message("menu_help.exit"))
         
         # ポストメニュー
         post_menu = wx.Menu()
-        new_post_item = post_menu.Append(wx.ID_ANY, "新規投稿(&N)\tCtrl+N", "新しい投稿を作成")
+        new_post_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.new_post"), i18n.get_message("menu_help.new_post"))
         post_menu.AppendSeparator()  # 区切り線
-        like_item = post_menu.Append(wx.ID_ANY, "いいね(&L)\tCtrl+L", "投稿にいいねする")
-        reply_item = post_menu.Append(wx.ID_ANY, "返信(&R)\tCtrl+R", "投稿に返信する")
-        repost_item = post_menu.Append(wx.ID_ANY, "リポスト(&T)\tCtrl+Shift+R", "投稿をリポストする")
-        quote_item = post_menu.Append(wx.ID_ANY, "引用(&Q)\tCtrl+Q", "投稿を引用する")
-        open_url_item = post_menu.Append(wx.ID_ANY, "URLを開く(&E)\tCtrl+E", "投稿内のURLを開く")
-        delete_item = post_menu.Append(wx.ID_ANY, "投稿を削除(&D)\tDel", "投稿を削除する")
+        like_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.like"), i18n.get_message("menu_help.like"))
+        reply_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.reply"), i18n.get_message("menu_help.reply"))
+        repost_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.repost"), i18n.get_message("menu_help.repost"))
+        quote_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.quote"), i18n.get_message("menu_help.quote"))
+        open_url_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.open_url"), i18n.get_message("menu_help.open_url"))
+        delete_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.delete_post"), i18n.get_message("menu_help.delete_post"))
         post_menu.AppendSeparator()  # 区切り線
-        profile_item = post_menu.Append(wx.ID_ANY, "投稿者のプロフィールを表示(&P)\tCtrl+P", "投稿者のプロフィールを表示")
+        profile_item = post_menu.Append(wx.ID_ANY, i18n.get_message("menu.show_profile"), i18n.get_message("menu_help.show_profile"))
         
         # 設定メニュー
         settings_menu = wx.Menu()
-        settings_item = settings_menu.Append(wx.ID_ANY, "設定(&S)", "アプリケーション設定")
+        settings_item = settings_menu.Append(wx.ID_ANY, i18n.get_message("menu.settings"), i18n.get_message("menu_help.settings"))
         
         # ユーザー操作メニュー
         user_menu = wx.Menu()
-        following_item = user_menu.Append(wx.ID_ANY, "フォロー中ユーザー一覧(&F)", "フォロー中のユーザー一覧を表示")
-        followers_item = user_menu.Append(wx.ID_ANY, "フォロワー一覧(&W)", "フォロワーの一覧を表示")
-        muted_users_item = user_menu.Append(wx.ID_ANY, "ミュートしたユーザー一覧(&M)", "ミュートしたユーザーの一覧を表示")
-        blocked_users_item = user_menu.Append(wx.ID_ANY, "ブロックしたユーザー一覧(&B)", "ブロックしたユーザーの一覧を表示")
+        following_item = user_menu.Append(wx.ID_ANY, i18n.get_message("menu.following_list"), i18n.get_message("menu_help.following_list"))
+        followers_item = user_menu.Append(wx.ID_ANY, i18n.get_message("menu.followers_list"), i18n.get_message("menu_help.followers_list"))
+        muted_users_item = user_menu.Append(wx.ID_ANY, i18n.get_message("menu.muted_users"), i18n.get_message("menu_help.muted_users"))
+        blocked_users_item = user_menu.Append(wx.ID_ANY, i18n.get_message("menu.blocked_users"), i18n.get_message("menu_help.blocked_users"))
         
         # メニューバーにメニューを追加
-        menubar.Append(app_menu, "アプリ(&A)")
-        menubar.Append(post_menu, "ポスト(&P)")
-        menubar.Append(user_menu, "ユーザー操作(&U)")
-        menubar.Append(settings_menu, "設定(&S)")
+        menubar.Append(app_menu, i18n.get_message("menu.app_menu"))
+        menubar.Append(post_menu, i18n.get_message("menu.post_menu"))
+        menubar.Append(user_menu, i18n.get_message("menu.user_menu"))
+        menubar.Append(settings_menu, i18n.get_message("menu.settings_menu"))
         
         # メニューバーをフレームに設定
         self.SetMenuBar(menubar)
@@ -182,39 +184,42 @@ class MainFrame(wx.Frame):
     def _on_login_success(self, profile: ProfileViewDetailed):
         """ログイン成功イベントハンドラ"""
         logger.info(f"Login successful event received for: {profile.handle}")
+        i18n = get_i18n()
         self.SetTitle(f"SSky - [{profile.handle}]")
-        self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+        self.statusbar.SetStatusText(i18n.get_message("status.logged_in_as", handle=profile.handle))
         self.update_login_status(True)
         # タイムラインビューも更新
         if hasattr(self.timeline, 'update_login_status'):
             self.timeline.update_login_status(True)
         # タイムラインを取得
-        self.statusbar.SetStatusText("タイムラインを更新しています...")
+        self.statusbar.SetStatusText(i18n.get_message("status.updating_timeline"))
         if hasattr(self.timeline, 'fetch_timeline'):
             # fetch_timeline が client を引数に取るか確認
             self.timeline.fetch_timeline(self.client) # client を渡す
-            self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+            self.statusbar.SetStatusText(i18n.get_message("status.logged_in_as", handle=profile.handle))
 
     def _on_session_load_success(self, profile: ProfileViewDetailed):
         """セッションからのログイン成功イベントハンドラ"""
         logger.info(f"Session load successful event received for: {profile.handle}")
+        i18n = get_i18n()
         self.SetTitle(f"SSky - [{profile.handle}]")
-        self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+        self.statusbar.SetStatusText(i18n.get_message("status.logged_in_as", handle=profile.handle))
         self.update_login_status(True)
         # タイムラインビューも更新
         if hasattr(self.timeline, 'update_login_status'):
             self.timeline.update_login_status(True)
         # タイムラインを取得
-        self.statusbar.SetStatusText("タイムラインを更新しています...")
+        self.statusbar.SetStatusText(i18n.get_message("status.updating_timeline"))
         if hasattr(self.timeline, 'fetch_timeline'):
             self.timeline.fetch_timeline(self.client)
-            self.statusbar.SetStatusText(f"{profile.handle}としてログインしました")
+            self.statusbar.SetStatusText(i18n.get_message("status.logged_in_as", handle=profile.handle))
 
     def _on_logout_success(self):
         """ログアウト成功イベントハンドラ"""
         logger.info("Logout successful event received.")
+        i18n = get_i18n()
         self.SetTitle("SSky")
-        self.statusbar.SetStatusText("ログアウトしました")
+        self.statusbar.SetStatusText(i18n.get_message("status.logged_out"))
         self.update_login_status(False)
         # タイムラインビューも更新
         if hasattr(self.timeline, 'update_login_status'):
@@ -228,7 +233,8 @@ class MainFrame(wx.Frame):
     def _on_login_failure(self, error: Exception):
         """ログイン失敗イベントハンドラ"""
         logger.error(f"Login failure event received: {error}")
-        self.statusbar.SetStatusText("ログインに失敗しました")
+        i18n = get_i18n()
+        self.statusbar.SetStatusText(i18n.get_message("status.login_failed"))
         self.update_login_status(False)
         # タイムラインビューも更新
         if hasattr(self.timeline, 'update_login_status'):
@@ -236,18 +242,19 @@ class MainFrame(wx.Frame):
         elif hasattr(self.timeline, 'show_not_logged_in_message'):
              self.timeline.show_not_logged_in_message()
         # エラーダイアログ表示
-        error_message = f"ログインに失敗しました: {str(error)}\n\n2段階認証を設定しているアカウントは、アプリパスワードを使用してください。"
-        wx.MessageBox(error_message, "ログイン失敗", wx.OK | wx.ICON_ERROR, parent=self)
+        error_message = i18n.get_message("error.login_failed_with_2fa", error=str(error))
+        wx.MessageBox(error_message, i18n.get_message("status.login_failed"), wx.OK | wx.ICON_ERROR, parent=self)
         # 失敗後に再度ログインダイアログを表示するロジックが必要ならここに追加
         # self._on_login_menu_select(None)
 
     def _on_session_load_failure(self, error: Exception | None, needs_relogin: bool):
         """セッション読み込み失敗イベントハンドラ"""
         logger.warning(f"Session load failure event received: error={error}, needs_relogin={needs_relogin}")
+        i18n = get_i18n()
         if needs_relogin:
-            self.statusbar.SetStatusText("セッションが無効か、読み込みに失敗しました。再ログインが必要です。")
+            self.statusbar.SetStatusText(i18n.get_message("status.session_invalid"))
         else:
-            self.statusbar.SetStatusText("セッション情報が見つかりませんでした。")
+            self.statusbar.SetStatusText(i18n.get_message("status.session_not_found"))
         self.update_login_status(False)
         # タイムラインビューも更新
         if hasattr(self.timeline, 'update_login_status'):
@@ -256,19 +263,20 @@ class MainFrame(wx.Frame):
              self.timeline.show_not_logged_in_message()
         # 必要ならエラーメッセージ表示
         if error:
-             wx.MessageBox(f"セッションの読み込みに失敗しました: {error}", "セッションエラー", wx.OK | wx.ICON_WARNING, parent=self)
+             wx.MessageBox(i18n.get_message("error.session_load_failed", error=str(error)), i18n.get_message("error.session_error"), wx.OK | wx.ICON_WARNING, parent=self)
 
     def _on_session_invalid(self, error: Exception, did: str):
         """セッション無効イベントハンドラ"""
         logger.error(f"Session invalid event received for DID {did}: {error}")
-        self.statusbar.SetStatusText("セッションが無効になりました。再ログインしてください。")
+        i18n = get_i18n()
+        self.statusbar.SetStatusText(i18n.get_message("status.session_invalidated"))
         self.update_login_status(False)
         # タイムラインビューも更新
         if hasattr(self.timeline, 'update_login_status'):
             self.timeline.update_login_status(False)
         elif hasattr(self.timeline, 'show_not_logged_in_message'):
              self.timeline.show_not_logged_in_message()
-        wx.MessageBox(f"セッションが無効になりました: {error}\n再ログインが必要です。", "セッションエラー", wx.OK | wx.ICON_ERROR, parent=self)
+        wx.MessageBox(i18n.get_message("error.session_invalid_relogin", error=str(error)), i18n.get_message("error.session_error"), wx.OK | wx.ICON_ERROR, parent=self)
 
 
     # --- Menu Event Handlers ---
@@ -404,13 +412,12 @@ class MainFrame(wx.Frame):
         Args:
             event: メニューイベント
         """
+        i18n = get_i18n()
         # 確認ダイアログを表示
         dlg = wx.MessageDialog(
             self,
-            "データベースをリセットすると、すべてのログイン情報とセッション情報が削除されます。\n"
-            "アプリケーションを再起動する必要があります。\n\n"
-            "続行しますか？",
-            "データベースのリセット確認",
+            i18n.get_message("confirm.reset_database.message"),
+            i18n.get_message("confirm.reset_database.title"),
             wx.YES_NO | wx.ICON_EXCLAMATION
         )
         
@@ -435,9 +442,8 @@ class MainFrame(wx.Frame):
                     
                     # 成功メッセージを表示
                     wx.MessageBox(
-                        "データベースをリセットしました。\n"
-                        "アプリケーションを再起動してください。",
-                        "データベースのリセット完了",
+                        i18n.get_message("info.reset_database_success"),
+                        i18n.get_message("info.reset_database_success_title"),
                         wx.OK | wx.ICON_INFORMATION
                     )
                     
@@ -446,17 +452,15 @@ class MainFrame(wx.Frame):
                 else:
                     logger.warning(f"データベースファイルが見つかりませんでした: {db_path}")
                     wx.MessageBox(
-                        "データベースファイルが見つかりませんでした。\n"
-                        "アプリケーションを再起動してください。",
-                        "警告",
+                        i18n.get_message("info.reset_database_not_found"),
+                        i18n.get_message("error.warning"),
                         wx.OK | wx.ICON_WARNING
                     )
             except Exception as e:
                 logger.error(f"データベースファイルの削除に失敗しました: {str(e)}")
                 wx.MessageBox(
-                    f"データベースファイルの削除に失敗しました: {str(e)}\n"
-                    "アプリケーションを再起動して再試行してください。",
-                    "エラー",
+                    i18n.get_message("info.reset_database_failed", error=str(e)),
+                    i18n.get_message("info.reset_database_failed_title"),
                     wx.OK | wx.ICON_ERROR
                 )
     
@@ -472,7 +476,7 @@ class MainFrame(wx.Frame):
             # タイムラインビューに設定を適用
             self.timeline.set_auto_fetch(auto_fetch, fetch_interval)
             
-    @require_authentication("フォロー中ユーザー一覧を表示するにはログインしてください")
+    @require_authentication(lambda: get_i18n().get_message("auth_required.following_list"))
     def on_following_list(self, event):
         """フォロー中ユーザー一覧ダイアログを表示
         
@@ -485,7 +489,7 @@ class MainFrame(wx.Frame):
         dialog.ShowModal()
         dialog.Destroy()
         
-    @require_authentication("フォロワー一覧を表示するにはログインしてください")
+    @require_authentication(lambda: get_i18n().get_message("auth_required.followers_list"))
     def on_followers_list(self, event):
         """フォロワー一覧ダイアログを表示
         
@@ -498,7 +502,7 @@ class MainFrame(wx.Frame):
         dialog.ShowModal()
         dialog.Destroy()
         
-    @require_authentication("ミュートしたユーザー一覧を表示するにはログインしてください")
+    @require_authentication(lambda: get_i18n().get_message("auth_required.muted_users"))
     def on_muted_users_list(self, event):
         """ミュートしたユーザー一覧ダイアログを表示
         
@@ -511,7 +515,7 @@ class MainFrame(wx.Frame):
         dialog.ShowModal()
         dialog.Destroy()
         
-    @require_authentication("ブロックしたユーザー一覧を表示するにはログインしてください")
+    @require_authentication(lambda: get_i18n().get_message("auth_required.blocked_users"))
     def on_blocked_users_list(self, event):
         """ブロックしたユーザー一覧ダイアログを表示
         

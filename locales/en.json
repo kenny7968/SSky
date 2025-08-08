@@ -1,0 +1,110 @@
+{
+  "menu": {
+    "login": "Login to Bluesky(&A)",
+    "logout": "Logout(&L)",
+    "reset_database": "Reset Database(&R)",
+    "exit": "Exit(&X)",
+    "new_post": "New Post(&N)\tCtrl+N",
+    "like": "Like(&L)\tCtrl+L",
+    "reply": "Reply(&R)\tCtrl+R",
+    "repost": "Repost(&T)\tCtrl+Shift+R",
+    "quote": "Quote(&Q)\tCtrl+Q",
+    "open_url": "Open URL(&E)\tCtrl+E",
+    "delete_post": "Delete Post(&D)\tDel",
+    "show_profile": "Show Profile(&P)\tCtrl+P",
+    "following_list": "Following List(&F)",
+    "followers_list": "Followers List(&W)",
+    "muted_users": "Muted Users List(&M)",
+    "blocked_users": "Blocked Users List(&B)",
+    "settings": "Settings(&S)",
+    "app_menu": "App(&A)",
+    "post_menu": "Post(&P)",
+    "user_menu": "User Operations(&U)",
+    "settings_menu": "Settings(&S)"
+  },
+  "menu_help": {
+    "login": "Login to Bluesky",
+    "logout": "Logout from Bluesky",
+    "reset_database": "Reset and reinitialize database",
+    "exit": "Exit application",
+    "new_post": "Create a new post",
+    "like": "Like this post",
+    "reply": "Reply to this post",
+    "repost": "Repost this post",
+    "quote": "Quote this post",
+    "open_url": "Open URL in this post",
+    "delete_post": "Delete this post",
+    "show_profile": "Show author's profile",
+    "following_list": "Show following users list",
+    "followers_list": "Show followers list",
+    "muted_users": "Show muted users list",
+    "blocked_users": "Show blocked users list",
+    "settings": "Application settings"
+  },
+  "status": {
+    "logged_in_as": "Logged in as {handle}",
+    "updating_timeline": "Updating timeline...",
+    "logged_out": "Logged out",
+    "login_failed": "Login failed",
+    "session_invalid": "Session is invalid or failed to load. Please login again.",
+    "session_not_found": "Session information not found.",
+    "session_invalidated": "Session has been invalidated. Please login again.",
+    "home_timeline_not_logged_in": "Home Timeline - Not logged in"
+  },
+  "error": {
+    "title": "Error",
+    "warning": "Warning",
+    "info": "Information",
+    "login_error": "Input Error",
+    "session_error": "Session Error",
+    "post_content_required": "Please enter post content",
+    "username_password_required": "Please enter username and app password",
+    "login_required_follow": "Please login to follow users",
+    "login_required_unfollow": "Please login to unfollow users",
+    "login_required_block": "Please login to block users",
+    "login_required_mute": "Please login to mute users",
+    "max_attachments": "Maximum 4 files can be attached",
+    "user_handle_fetch_failed": "Failed to fetch user handle.",
+    "url_not_found": "URL not found",
+    "login_failed_with_2fa": "Login failed: {error}\n\nFor accounts with 2FA enabled, please use an app password.",
+    "session_load_failed": "Failed to load session: {error}",
+    "session_invalid_relogin": "Session has been invalidated: {error}\nPlease login again."
+  },
+  "dialog": {
+    "new_post": "New Post (Ctrl+Enter to send)",
+    "settings": "Settings",
+    "profile": "Profile",
+    "followers": "Followers",
+    "following": "Following",
+    "muted_users": "Muted Users",
+    "blocked_users": "Blocked Users"
+  },
+  "button": {
+    "loading": "Loading...",
+    "load_more": "Load More",
+    "no_more": "No more items",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "close": "Close"
+  },
+  "confirm": {
+    "reset_database": {
+      "message": "Resetting the database will delete all login information and session data.\nYou will need to restart the application.\n\nDo you want to continue?",
+      "title": "Confirm Database Reset"
+    }
+  },
+  "info": {
+    "reset_database_success": "Database has been reset.\nPlease restart the application.",
+    "reset_database_success_title": "Database Reset Complete",
+    "reset_database_not_found": "Database file not found.\nPlease restart the application.",
+    "reset_database_failed": "Failed to delete database file: {error}\nPlease restart the application and try again.",
+    "reset_database_failed_title": "Database Reset Failed"
+  },
+  "auth_required": {
+    "following_list": "Please login to view following list",
+    "followers_list": "Please login to view followers list",
+    "muted_users": "Please login to view muted users list",
+    "blocked_users": "Please login to view blocked users list"
+  }
+}

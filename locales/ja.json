@@ -1,0 +1,110 @@
+{
+  "menu": {
+    "login": "Blueskyにログイン(&A)",
+    "logout": "ログアウト(&L)",
+    "reset_database": "データベースをリセット(&R)",
+    "exit": "終了(&X)",
+    "new_post": "新規投稿(&N)\tCtrl+N",
+    "like": "いいね(&L)\tCtrl+L",
+    "reply": "返信(&R)\tCtrl+R",
+    "repost": "リポスト(&T)\tCtrl+Shift+R",
+    "quote": "引用(&Q)\tCtrl+Q",
+    "open_url": "URLを開く(&E)\tCtrl+E",
+    "delete_post": "投稿を削除(&D)\tDel",
+    "show_profile": "投稿者のプロフィールを表示(&P)\tCtrl+P",
+    "following_list": "フォロー中ユーザー一覧(&F)",
+    "followers_list": "フォロワー一覧(&W)",
+    "muted_users": "ミュートしたユーザー一覧(&M)",
+    "blocked_users": "ブロックしたユーザー一覧(&B)",
+    "settings": "設定(&S)",
+    "app_menu": "アプリ(&A)",
+    "post_menu": "ポスト(&P)",
+    "user_menu": "ユーザー操作(&U)",
+    "settings_menu": "設定(&S)"
+  },
+  "menu_help": {
+    "login": "Blueskyにログイン",
+    "logout": "Blueskyからログアウト",
+    "reset_database": "データベースをリセットして再初期化",
+    "exit": "アプリケーションを終了",
+    "new_post": "新しい投稿を作成",
+    "like": "投稿にいいねする",
+    "reply": "投稿に返信する",
+    "repost": "投稿をリポストする",
+    "quote": "投稿を引用する",
+    "open_url": "投稿内のURLを開く",
+    "delete_post": "投稿を削除する",
+    "show_profile": "投稿者のプロフィールを表示",
+    "following_list": "フォロー中のユーザー一覧を表示",
+    "followers_list": "フォロワーの一覧を表示",
+    "muted_users": "ミュートしたユーザーの一覧を表示",
+    "blocked_users": "ブロックしたユーザーの一覧を表示",
+    "settings": "アプリケーション設定"
+  },
+  "status": {
+    "logged_in_as": "{handle}としてログインしました",
+    "updating_timeline": "タイムラインを更新しています...",
+    "logged_out": "ログアウトしました",
+    "login_failed": "ログインに失敗しました",
+    "session_invalid": "セッションが無効か、読み込みに失敗しました。再ログインが必要です。",
+    "session_not_found": "セッション情報が見つかりませんでした。",
+    "session_invalidated": "セッションが無効になりました。再ログインしてください。",
+    "home_timeline_not_logged_in": "ホームタイムライン - ログインしていません"
+  },
+  "error": {
+    "title": "エラー",
+    "warning": "警告",
+    "info": "情報",
+    "login_error": "入力エラー",
+    "session_error": "セッションエラー",
+    "post_content_required": "投稿内容を入力してください",
+    "username_password_required": "ユーザー名とアプリパスワードを入力してください",
+    "login_required_follow": "フォローするにはログインしてください",
+    "login_required_unfollow": "フォロー解除するにはログインしてください",
+    "login_required_block": "ブロック操作にはログインしてください",
+    "login_required_mute": "ミュート操作にはログインしてください",
+    "max_attachments": "添付できるファイルは最大4つまでです",
+    "user_handle_fetch_failed": "ユーザーハンドルが取得できませんでした。",
+    "url_not_found": "URLが見つかりませんでした",
+    "login_failed_with_2fa": "ログインに失敗しました: {error}\n\n2段階認証を設定しているアカウントは、アプリパスワードを使用してください。",
+    "session_load_failed": "セッションの読み込みに失敗しました: {error}",
+    "session_invalid_relogin": "セッションが無効になりました: {error}\n再ログインが必要です。"
+  },
+  "dialog": {
+    "new_post": "新規投稿（Ctrl+Enterで送信）",
+    "settings": "設定",
+    "profile": "プロフィール",
+    "followers": "フォロワー",
+    "following": "フォロー中",
+    "muted_users": "ミュート中のユーザー",
+    "blocked_users": "ブロック中のユーザー"
+  },
+  "button": {
+    "loading": "読み込み中...",
+    "load_more": "もっと読み込む",
+    "no_more": "これ以上ありません",
+    "ok": "OK",
+    "cancel": "キャンセル",
+    "apply": "適用",
+    "close": "閉じる"
+  },
+  "confirm": {
+    "reset_database": {
+      "message": "データベースをリセットすると、すべてのログイン情報とセッション情報が削除されます。\nアプリケーションを再起動する必要があります。\n\n続行しますか？",
+      "title": "データベースのリセット確認"
+    }
+  },
+  "info": {
+    "reset_database_success": "データベースをリセットしました。\nアプリケーションを再起動してください。",
+    "reset_database_success_title": "データベースのリセット完了",
+    "reset_database_not_found": "データベースファイルが見つかりませんでした。\nアプリケーションを再起動してください。",
+    "reset_database_failed": "データベースファイルの削除に失敗しました: {error}\nアプリケーションを再起動して再試行してください。",
+    "reset_database_failed_title": "データベースリセット失敗"
+  },
+  "auth_required": {
+    "following_list": "フォロー中ユーザー一覧を表示するにはログインしてください",
+    "followers_list": "フォロワー一覧を表示するにはログインしてください",
+    "muted_users": "ミュートしたユーザー一覧を表示するにはログインしてください",
+    "blocked_users": "ブロックしたユーザー一覧を表示するにはログインしてください"
+  }
+}

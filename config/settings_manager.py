@@ -56,6 +56,9 @@ class SettingsManager:
             "post": {
                 "show_completion_dialog": True  # 投稿・返信・引用時に完了ダイアログを表示
             },
+            "language": {
+                "locale": "ja"             # 表示言語（ja: 日本語, en: 英語）
+            },
             "advanced": {
                 "enable_debug_log": False  # デバッグログを有効にする
             }
@@ -66,6 +69,9 @@ class SettingsManager:
         
         # 設定ファイルの読み込み
         self.load()
+        
+        # 国際化システムの初期化
+        self._initialize_i18n()
     
     def load(self):
         """設定ファイルから設定を読み込む"""
@@ -243,6 +249,12 @@ class SettingsManager:
         if fetch_count < 1 or fetch_count > 100:
             return False, "投稿の取得件数は1以上100以下に設定してください。"
         
+        # 言語設定のバリデーション
+        locale = self.get('language.locale', 'ja')
+        valid_locales = self._get_available_locales()
+        if locale not in valid_locales:
+            return False, f"言語設定が無効です。利用可能な言語: {', '.join(valid_locales)}"
+        
         # 他のバリデーションルールがあれば追加
         
         return True, None
@@ -267,11 +279,21 @@ class SettingsManager:
         if key == 'timeline.fetch_count' and (value < 1 or value > 100):
             return False, "投稿の取得件数は1以上100以下に設定してください。"
         
+        # 言語設定のバリデーション
+        if key == 'language.locale':
+            valid_locales = self._get_available_locales()
+            if value not in valid_locales:
+                return False, f"言語設定が無効です。利用可能な言語: {', '.join(valid_locales)}"
+        
         # 設定値の更新
         success = self.set(key, value)
         if not success:
             ErrorHandler.handle_validation_error("設定の更新に失敗しました。", "設定更新", None, show_dialog=False)
             return False, "設定の更新に失敗しました。"
+        
+        # 言語設定が変更された場合は国際化システムを更新
+        if key == 'language.locale' and success:
+            self._update_i18n_locale(value)
         
         return True, None
     
@@ -291,6 +313,13 @@ class SettingsManager:
         elif fetch_count > 100:
             self.set('timeline.fetch_count', 100)
             logger.info("投稿の取得件数が100を超えていたため、100に設定しました。")
+        
+        # 言語設定が無効な場合は日本語に設定
+        locale = self.get('language.locale', 'ja')
+        valid_locales = self._get_available_locales()
+        if locale not in valid_locales:
+            self.set('language.locale', 'ja')
+            logger.info(f"言語設定が無効だったため、日本語に設定しました。無効な値: {locale}")
     
     def _update_nested_dict(self, d, u):
         """ネストされた辞書を更新する
@@ -308,3 +337,49 @@ class SettingsManager:
             else:
                 d[k] = v
         return d
+    
+    def _initialize_i18n(self):
+        """国際化システムを初期化"""
+        try:
+            from utils.i18n import get_i18n
+            i18n = get_i18n()
+            locale = self.get('language.locale', 'ja')
+            i18n.set_locale(locale)
+            logger.debug(f"国際化システムを初期化しました。言語: {locale}")
+        except Exception as e:
+            logger.warning(f"国際化システムの初期化に失敗しました: {str(e)}")
+    
+    def _update_i18n_locale(self, locale):
+        """国際化システムの言語を更新"""
+        try:
+            from utils.i18n import get_i18n
+            i18n = get_i18n()
+            if i18n.set_locale(locale):
+                logger.info(f"言語を変更しました: {locale}")
+            else:
+                logger.error(f"言語変更に失敗しました: {locale}")
+        except Exception as e:
+            logger.error(f"言語更新中にエラーが発生しました: {str(e)}")
+    
+    def _get_available_locales(self):
+        """利用可能な言語一覧を取得"""
+        try:
+            from utils.i18n import get_i18n
+            return get_i18n().get_available_locales()
+        except Exception as e:
+            logger.warning(f"利用可能な言語一覧の取得に失敗しました: {str(e)}")
+            return ['ja']  # フォールバック
+    
+    def get_available_languages(self):
+        """言語選択用の表示名付き言語一覧を取得
+        
+        Returns:
+            list: (locale_code, display_name) のタプルのリスト
+        """
+        language_names = {
+            'ja': '日本語',
+            'en': 'English'
+        }
+        
+        available_locales = self._get_available_locales()
+        return [(locale, language_names.get(locale, locale)) for locale in available_locales]
