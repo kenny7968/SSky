@@ -1,0 +1,244 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  test-before-release:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.13
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-mock faker factory-boy
+
+    - name: Run comprehensive test suite
+      run: |
+        python -m pytest tests/unit tests/integration --cov=core --cov=utils --cov=config --cov-fail-under=75 -v
+      env:
+        PYTEST_RUNNING: 1
+
+    - name: Verify test results
+      run: |
+        echo "✅ All tests passed - ready for release build"
+
+  build-release:
+    runs-on: windows-latest
+    needs: test-before-release
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.13
+
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller scons wxPython
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION=${{ github.event.release.tag_name }}
+        else
+          VERSION=${{ github.event.inputs.version }}
+        fi
+        echo "VERSION=${VERSION#v}" >> $GITHUB_OUTPUT
+        echo "Building version: ${VERSION#v}"
+      shell: bash
+
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller --name SSky --noconsole --onedir --noupx --clean --noconfirm --log-level=INFO SSky.py
+
+    - name: Verify executable
+      run: |
+        if (Test-Path "dist/SSky/SSky.exe") {
+          echo "✅ PyInstaller build successful"
+          $fileInfo = Get-ChildItem "dist/SSky/SSky.exe"
+          echo "File size: $($fileInfo.Length / 1MB) MB"
+        } else {
+          echo "❌ PyInstaller build failed"
+          exit 1
+        }
+      shell: pwsh
+
+    - name: Build release package with SCons
+      run: |
+        scons --release=${{ steps.get_version.outputs.VERSION }}
+      continue-on-error: true
+
+    - name: Create release archive
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $archiveName = "SSky-$version-windows.zip"
+        
+        if (Test-Path "dist/SSky") {
+          Compress-Archive -Path "dist/SSky/*" -DestinationPath $archiveName -Force
+          echo "✅ Created release archive: $archiveName"
+          
+          $archiveInfo = Get-ChildItem $archiveName
+          echo "Archive size: $($archiveInfo.Length / 1MB) MB"
+        } else {
+          echo "❌ Build directory not found"
+          exit 1
+        }
+      shell: pwsh
+
+    - name: Generate build info
+      run: |
+        $version = "${{ steps.get_version.outputs.VERSION }}"
+        $buildTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC"
+        $commitHash = "${{ github.sha }}"
+        
+        @"
+        SSky Release Build Information
+        ==============================
+        Version: $version
+        Build Time: $buildTime
+        Commit: $commitHash
+        Platform: Windows
+        Python Version: 3.13
+        
+        Build Contents:
+        - SSky.exe (Main executable)
+        - Required DLLs and dependencies
+        - Python runtime environment
+        
+        Installation:
+        1. Extract the ZIP file
+        2. Run SSky.exe
+        
+        Requirements:
+        - Windows 10 or later
+        - Screen reader software (NVDA, JAWS, etc.) for accessibility
+        
+        "@ | Out-File -FilePath "BUILD_INFO.txt" -Encoding utf8
+      shell: pwsh
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: SSky-${{ steps.get_version.outputs.VERSION }}-windows
+        path: |
+          SSky-*.zip
+          BUILD_INFO.txt
+
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: SSky-${{ steps.get_version.outputs.VERSION }}-windows.zip
+        asset_name: SSky-${{ steps.get_version.outputs.VERSION }}-windows.zip
+        asset_content_type: application/zip
+
+    - name: Upload build info to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: BUILD_INFO.txt
+        asset_name: BUILD_INFO.txt
+        asset_content_type: text/plain
+
+  create-manual-release:
+    runs-on: windows-latest
+    needs: build-release
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: SSky-${{ github.event.inputs.version }}-windows
+
+    - name: Create manual release
+      uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ github.event.inputs.version }}
+        release_name: SSky v${{ github.event.inputs.version }}
+        body: |
+          ## SSky v${{ github.event.inputs.version }}
+          
+          Manual release created from workflow dispatch.
+          
+          ### Changes
+          - Please update this section with actual changes
+          
+          ### Download
+          - **Windows**: Download `SSky-${{ github.event.inputs.version }}-windows.zip`
+          
+          ### Installation
+          1. Download and extract the ZIP file
+          2. Run `SSky.exe`
+          3. Configure your screen reader if needed
+          
+          ### Requirements
+          - Windows 10 or later
+          - Screen reader software (NVDA, JAWS, etc.)
+          
+          ---
+          Built with GitHub Actions
+        draft: true
+        prerelease: false
+
+    - name: Upload manual release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: SSky-${{ github.event.inputs.version }}-windows.zip
+        asset_name: SSky-${{ github.event.inputs.version }}-windows.zip
+        asset_content_type: application/zip
+
+  post-release:
+    runs-on: windows-latest
+    needs: [test-before-release, build-release]
+    if: always() && (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+
+    steps:
+    - name: Release summary
+      run: |
+        echo "=== SSky Release Build Summary ==="
+        echo "Event: ${{ github.event_name }}"
+        echo "Version: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event.inputs.version }}"
+        echo "Tests: ${{ needs.test-before-release.result }}"
+        echo "Build: ${{ needs.build-release.result }}"
+        
+        if [ "${{ needs.test-before-release.result }}" = "success" ] && [ "${{ needs.build-release.result }}" = "success" ]; then
+          echo "✅ Release build completed successfully"
+        else
+          echo "❌ Release build failed"
+          exit 1
+        fi
+      shell: bash

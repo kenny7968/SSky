@@ -166,14 +166,28 @@ class MigrationManager:
 
 
 class DataStore:
-    """データ永続化クラス"""
+    """データ永続化クラス（Phase 3 依存性注入強化版）
     
-    def __init__(self, db_path: Optional[str] = None):
-        """初期化
+    SQLiteを使用してセッション情報などのデータを永続化します。
+    
+    Phase 3変更点:
+    - カスタム接続ファクトリ関数を注入可能
+    - テスト時のメモリDB簡単使用
+    - 設定可能なマイグレーション管理
+    """
+    
+    def __init__(self, 
+                 db_path: Optional[str] = None,
+                 connection_factory: Optional[callable] = None,
+                 migration_manager: Optional['MigrationManager'] = None,
+                 auto_init: bool = True):
+        """初期化（依存性注入強化版）
         
         Args:
-            db_path (str, optional): データベースファイルのパス。
-                指定しない場合はデフォルトのパスを使用。
+            db_path: データベースファイルのパス（未指定の場合はデフォルト）
+            connection_factory: 接続作成関数（テスト時のモック用）
+            migration_manager: マイグレーション管理インスタンス
+            auto_init: 自動初期化フラグ（False時は手動で_init_db()呼び出し要）
         """
         if db_path is None:
             # デフォルトのデータベースパス
@@ -182,17 +196,23 @@ class DataStore:
         else:
             self.db_path = db_path
         
-        self.migration_manager = MigrationManager(self.db_path)
+        # 接続ファクトリの注入（テスト時のモック対応）
+        self.connection_factory = connection_factory or (lambda: sqlite3.connect(self.db_path))
         
-        # データベースの初期化
-        self._init_db()
+        # マイグレーション管理の注入
+        self.migration_manager = migration_manager or MigrationManager(self.db_path)
+        
+        # 自動初期化
+        if auto_init:
+            self._init_db()
     
     @contextmanager
     def get_connection(self):
-        """データベース接続のコンテキストマネージャー"""
+        """データベース接続のコンテキストマネージャー（依存性注入対応）"""
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            # 注入された接続ファクトリを使用
+            conn = self.connection_factory()
             yield conn
         except Exception as e:
             if conn:
@@ -225,6 +245,73 @@ class DataStore:
         except Exception as e:
             logger.error(f"データベースの初期化に失敗しました: {str(e)}")
             raise
+
+    # Phase 3 追加: ファクトリメソッド
+    @classmethod
+    def create_in_memory(cls, migration_manager: Optional['MigrationManager'] = None):
+        """テスト用のメモリ内データベースを作成
+        
+        Args:
+            migration_manager: カスタムマイグレーション管理（テスト用）
+            
+        Returns:
+            DataStore: メモリ内データベースを使用するインスタンス
+        """
+        import sqlite3
+        
+        # メモリ内データベース接続ファクトリ
+        def memory_connection_factory():
+            return sqlite3.connect(":memory:")
+        
+        # メモリ用のマイグレーション管理（パスは使用されない）
+        if migration_manager is None:
+            migration_manager = MigrationManager(":memory:")
+        
+        return cls(
+            db_path=":memory:",
+            connection_factory=memory_connection_factory,
+            migration_manager=migration_manager
+        )
+    
+    @classmethod  
+    def create_for_testing(cls, temp_path: str = None):
+        """テスト用の一時データベースを作成
+        
+        Args:
+            temp_path: 一時データベースのパス（未指定時は自動生成）
+            
+        Returns:
+            DataStore: テスト用データベースを使用するインスタンス
+        """
+        import tempfile
+        import os
+        
+        if temp_path is None:
+            # 一時ファイルを作成
+            fd, temp_path = tempfile.mkstemp(suffix='.db', prefix='ssky_test_')
+            os.close(fd)  # ファイルディスクリプタを閉じる
+        
+        return cls(db_path=temp_path)
+    
+    @classmethod
+    def create_with_custom_migration(cls, db_path: str, custom_migrations: List[callable]):
+        """カスタムマイグレーションを持つデータベースを作成
+        
+        Args:
+            db_path: データベースファイルのパス
+            custom_migrations: カスタムマイグレーション関数のリスト
+            
+        Returns:
+            DataStore: カスタムマイグレーション対応インスタンス
+        """
+        # カスタムマイグレーション管理を作成
+        custom_manager = MigrationManager(db_path)
+        # custom_manager.custom_migrations = custom_migrations  # 実装に応じて調整
+        
+        return cls(
+            db_path=db_path,
+            migration_manager=custom_manager
+        )
             
     def save_session(self, user_did: str, encrypted_session: bytes) -> bool:
         """セッション情報を保存

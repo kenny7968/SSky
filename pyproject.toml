@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SSky"
+version = "1.0.0"
+description = "Screen reader optimized Bluesky client for Windows"
+authors = [{name = "SSky Project"}]
+license = {text = "MIT"}
+requires-python = ">=3.9"
+dependencies = [
+    "atproto>=0.0.61",
+    "pywin32>=310",
+    "PyPubSub>=4.0.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0", 
+    "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "factory-boy>=3.2.0",
+]
+
+[tool.pytest.ini_options]
+# pytest設定（pytest.iniと重複する場合はこちらが優先）
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*", "*Test"]
+python_functions = ["test_*"]
+addopts = [
+    "--verbose",
+    "--tb=short", 
+    "--strict-markers",
+    "--disable-warnings",
+    "--color=yes"
+]
+
+[tool.coverage.run]
+# カバレッジ設定
+source = ["core", "utils", "config"]
+omit = [
+    "tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "gui/*",  # GUI層は除外（テストが困難）
+    "SSky.py"  # エントリーポイントは除外
+]
+
+[tool.coverage.report]
+# カバレッジレポート設定
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if False:",
+]
+ignore_errors = true
+show_missing = true
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.mypy]
+# 静的型チェック設定（将来的な導入検討）
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

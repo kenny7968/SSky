@@ -1,0 +1,66 @@
+[run]
+# カバレッジ測定対象
+source = core, utils, config
+
+# 除外するファイル
+omit = 
+    tests/*
+    */test_*.py
+    */__init__.py
+    gui/*
+    SSky.py
+    */migrations/*
+    */.pytest_cache/*
+    */htmlcov/*
+    setup.py
+    conftest.py
+
+# 測定ブランチカバレッジ
+branch = true
+
+# 並列実行時のデータ結合
+parallel = true
+
+[report]
+# レポートから除外する行
+exclude_lines = 
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if False:
+    if TYPE_CHECKING:
+    @abstractmethod
+    pass
+
+# エラーを無視
+ignore_errors = true
+
+# カバレッジしていない行を表示
+show_missing = true
+
+# 精度設定
+precision = 1
+
+# ソートキー
+sort = Cover
+
+[html]
+# HTMLレポートのディレクトリ
+directory = htmlcov
+
+# HTMLレポートのタイトル
+title = SSky Test Coverage Report
+
+[xml]
+# XMLレポートのファイル名
+output = coverage.xml
+
+[json]
+# JSONレポートのファイル名
+output = coverage.json
+
+# 詳細情報を含める
+pretty_print = true

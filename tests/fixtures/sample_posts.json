@@ -1,0 +1,120 @@
+[
+  {
+    "uri": "at://alice.bsky.social/app.bsky.feed.post/1",
+    "cid": "test_cid_1",
+    "author": {
+      "did": "did:plc:alice123",
+      "handle": "alice.bsky.social",
+      "displayName": "Alice Test",
+      "avatar": "https://example.com/alice_avatar.jpg"
+    },
+    "record": {
+      "text": "テスト投稿1です。これは通常の投稿のサンプルです。",
+      "createdAt": "2024-01-01T12:00:00.000Z",
+      "langs": ["ja"]
+    },
+    "indexedAt": "2024-01-01T12:00:01.000Z",
+    "replyCount": 5,
+    "repostCount": 3,
+    "likeCount": 12
+  },
+  {
+    "uri": "at://bob.bsky.social/app.bsky.feed.post/2", 
+    "cid": "test_cid_2",
+    "author": {
+      "did": "did:plc:bob456",
+      "handle": "bob.bsky.social",
+      "displayName": "Bob Test",
+      "avatar": "https://example.com/bob_avatar.jpg"
+    },
+    "record": {
+      "text": "画像付きテスト投稿です。\n\n#テスト #BlueskyAPI",
+      "createdAt": "2024-01-01T11:30:00.000Z",
+      "langs": ["ja"],
+      "embed": {
+        "$type": "app.bsky.embed.images",
+        "images": [
+          {
+            "alt": "テスト画像の説明",
+            "image": {
+              "ref": "test_image_blob_ref",
+              "mimeType": "image/jpeg",
+              "size": 123456
+            }
+          }
+        ]
+      }
+    },
+    "indexedAt": "2024-01-01T11:30:01.000Z",
+    "replyCount": 2,
+    "repostCount": 1,
+    "likeCount": 8
+  },
+  {
+    "uri": "at://charlie.bsky.social/app.bsky.feed.post/3",
+    "cid": "test_cid_3", 
+    "author": {
+      "did": "did:plc:charlie789",
+      "handle": "charlie.bsky.social",
+      "displayName": "Charlie Development",
+      "avatar": "https://example.com/charlie_avatar.jpg"
+    },
+    "record": {
+      "text": "これはリプライのテスト投稿です。",
+      "createdAt": "2024-01-01T10:15:00.000Z",
+      "langs": ["ja"],
+      "reply": {
+        "root": {
+          "uri": "at://alice.bsky.social/app.bsky.feed.post/1",
+          "cid": "test_cid_1"
+        },
+        "parent": {
+          "uri": "at://alice.bsky.social/app.bsky.feed.post/1", 
+          "cid": "test_cid_1"
+        }
+      }
+    },
+    "indexedAt": "2024-01-01T10:15:01.000Z",
+    "replyCount": 0,
+    "repostCount": 0,
+    "likeCount": 3
+  },
+  {
+    "uri": "at://dave.bsky.social/app.bsky.feed.post/4",
+    "cid": "test_cid_4",
+    "author": {
+      "did": "did:plc:dave999",
+      "handle": "dave.bsky.social",
+      "displayName": "Dave Tester",
+      "avatar": "https://example.com/dave_avatar.jpg"
+    },
+    "record": {
+      "text": "長いテキストの投稿サンプルです。この投稿は複数行にわたる長いテキストを含んでおり、テキスト表示やフォーマット処理のテストに使用されます。\n\n改行も含まれています。\n\n複数の段落を持つ投稿のテストケースとして活用できます。Bluesky APIではこのような長い投稿も適切に処理される必要があります。",
+      "createdAt": "2024-01-01T09:45:00.000Z",
+      "langs": ["ja"]
+    },
+    "indexedAt": "2024-01-01T09:45:01.000Z",
+    "replyCount": 15,
+    "repostCount": 7,
+    "likeCount": 25
+  },
+  {
+    "uri": "at://eve.bsky.social/app.bsky.feed.post/5",
+    "cid": "test_cid_5",
+    "author": {
+      "did": "did:plc:eve555", 
+      "handle": "eve.bsky.social",
+      "displayName": "Eve QA",
+      "avatar": "https://example.com/eve_avatar.jpg"
+    },
+    "record": {
+      "text": "URL付き投稿のテストです。詳細はこちら: https://example.com/test-article また、メールアドレスtest@example.comも含まれています。",
+      "createdAt": "2024-01-01T08:30:00.000Z",
+      "langs": ["ja"]
+    },
+    "indexedAt": "2024-01-01T08:30:01.000Z",
+    "replyCount": 4,
+    "repostCount": 2,
+    "likeCount": 10
+  }
+]

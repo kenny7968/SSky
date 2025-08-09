@@ -1,0 +1,230 @@
+name: SSky Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # 毎日午前9時（JST）に実行
+    - cron: '0 0 * * *'
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: [3.9, 3.10, 3.11, 3.12, 3.13]
+        test-type: [unit, integration]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~\AppData\Local\pip\Cache
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-mock pytest-xdist faker factory-boy psutil
+
+    - name: Install wxPython (Windows specific)
+      run: |
+        pip install wxPython
+      continue-on-error: true
+
+    - name: Run ${{ matrix.test-type }} tests
+      run: |
+        python -m pytest tests/${{ matrix.test-type }} -v --tb=short --cov=core --cov=utils --cov=config --cov-report=xml --cov-report=term-missing
+      env:
+        PYTEST_RUNNING: 1
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: ${{ matrix.test-type }}-py${{ matrix.python-version }}
+        name: codecov-${{ matrix.test-type }}-py${{ matrix.python-version }}
+        fail_ci_if_error: false
+
+  performance-test:
+    runs-on: windows-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.13
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-mock faker factory-boy psutil
+
+    - name: Run performance tests
+      run: |
+        python -m pytest tests/performance -v --tb=short -m "performance and not slow"
+      env:
+        PYTEST_RUNNING: 1
+      continue-on-error: true
+
+    - name: Generate performance report
+      run: |
+        echo "Performance test completed" > performance_report.txt
+        echo "Date: $(date)" >> performance_report.txt
+      shell: bash
+
+  code-quality:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.13
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort mypy
+
+    - name: Lint with flake8
+      run: |
+        # E501: line too long (disabled for flexibility)
+        # W503: line break before binary operator (black compatibility)
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --ignore=E501,W503
+      continue-on-error: true
+
+    - name: Check code formatting with black
+      run: |
+        black --check --diff .
+      continue-on-error: true
+
+    - name: Check import sorting with isort
+      run: |
+        isort --check-only --diff .
+      continue-on-error: true
+
+    - name: Type check with mypy
+      run: |
+        mypy core utils config --ignore-missing-imports --no-strict-optional
+      continue-on-error: true
+
+  build-test:
+    runs-on: windows-latest
+    needs: [test, code-quality]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.13
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Install wxPython
+      run: |
+        pip install wxPython
+      continue-on-error: true
+
+    - name: Build executable
+      run: |
+        pyinstaller --name SSky --noconsole --onedir --noupx --clean --noconfirm --log-level=INFO SSky.py
+      continue-on-error: true
+
+    - name: Test executable
+      run: |
+        if (Test-Path "dist/SSky/SSky.exe") {
+          echo "✅ Build successful: SSky.exe created"
+          # 実際には実行テストは GUI が必要なのでスキップ
+          # .\dist\SSky\SSky.exe --version
+        } else {
+          echo "❌ Build failed: SSky.exe not found"
+          exit 1
+        }
+      shell: pwsh
+      continue-on-error: true
+
+  dependency-check:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.13
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.13
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety pip-audit
+
+    - name: Security audit with safety
+      run: |
+        safety check
+      continue-on-error: true
+
+    - name: Security audit with pip-audit
+      run: |
+        pip-audit
+      continue-on-error: true
+
+  test-summary:
+    runs-on: windows-latest
+    needs: [test, performance-test, code-quality, build-test, dependency-check]
+    if: always()
+
+    steps:
+    - name: Test Summary
+      run: |
+        echo "=== SSky Test Suite Summary ==="
+        echo "Unit Tests: ${{ needs.test.result }}"
+        echo "Performance Tests: ${{ needs.performance-test.result }}"
+        echo "Code Quality: ${{ needs.code-quality.result }}"
+        echo "Build Test: ${{ needs.build-test.result }}"
+        echo "Dependency Check: ${{ needs.dependency-check.result }}"
+        
+        if [ "${{ needs.test.result }}" = "success" ]; then
+          echo "✅ Core tests passed"
+        else
+          echo "❌ Core tests failed"
+        fi
+      shell: bash
+
+    - name: Set overall result
+      run: |
+        if [ "${{ needs.test.result }}" != "success" ]; then
+          echo "❌ Critical tests failed"
+          exit 1
+        else
+          echo "✅ Test suite completed successfully"
+        fi
+      shell: bash

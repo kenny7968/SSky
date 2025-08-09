@@ -22,20 +22,57 @@ from core.error_handler import UnifiedErrorHandler
 logger = logging.getLogger(__name__)
 
 class BlueskyClient:
-    """Blueskyクライアントファサードクラス
+    """Blueskyクライアントファサードクラス（Phase 3 依存性注入対応）
     
     分割された各コンポーネントのファサードとして機能し、
     既存のコードとの互換性を維持します。
+    
+    Phase 3変更点:
+    - 全コンポーネントを外部から注入可能に変更
+    - 後方互換性を維持しつつ、テスト時の依存性差し替えを容易にする
     """
     
-    def __init__(self):
-        """初期化"""
-        # コンポーネントの作成と接続
-        self.api_client = BlueskyApiClient()
-        self.session_manager = BlueskySessionManager(self.api_client)
-        self.auth_manager = BlueskyAuthManager(self.api_client, self.session_manager)
-        self.error_handler = UnifiedErrorHandler(self.auth_manager)
-        self.user_manager = BlueskyUserManager(self.api_client, self.auth_manager)
+    def __init__(self, 
+                 api_client: BlueskyApiClient = None,
+                 session_manager: BlueskySessionManager = None,
+                 auth_manager: BlueskyAuthManager = None,
+                 error_handler: UnifiedErrorHandler = None,
+                 user_manager: BlueskyUserManager = None):
+        """初期化（依存性注入対応）
+        
+        Args:
+            api_client: APIクライアント（未指定時はデフォルト作成）
+            session_manager: セッション管理（未指定時はデフォルト作成）
+            auth_manager: 認証管理（未指定時はデフォルト作成）
+            error_handler: エラーハンドラー（未指定時はデフォルト作成）
+            user_manager: ユーザー管理（未指定時はデフォルト作成）
+        """
+        # コンポーネントの注入または作成
+        self.api_client = api_client or BlueskyApiClient()
+        
+        # セッションマネージャーの初期化（api_clientに依存）
+        if session_manager is not None:
+            self.session_manager = session_manager
+        else:
+            self.session_manager = BlueskySessionManager(self.api_client)
+        
+        # 認証マネージャーの初期化（api_client, session_managerに依存）
+        if auth_manager is not None:
+            self.auth_manager = auth_manager
+        else:
+            self.auth_manager = BlueskyAuthManager(self.api_client, self.session_manager)
+        
+        # エラーハンドラーの初期化（auth_managerに依存）
+        if error_handler is not None:
+            self.error_handler = error_handler
+        else:
+            self.error_handler = UnifiedErrorHandler(self.auth_manager)
+        
+        # ユーザーマネージャーの初期化（api_client, auth_managerに依存）
+        if user_manager is not None:
+            self.user_manager = user_manager
+        else:
+            self.user_manager = BlueskyUserManager(self.api_client, self.auth_manager)
         
         # セッションマネージャーにAPIクライアントを登録
         self.session_manager.register_client(self.api_client)
@@ -47,6 +84,65 @@ class BlueskyClient:
         """プロパティをバインド"""
         # クライアントプロパティ
         self.client = self.api_client.client
+
+    # Phase 3 追加: ファクトリメソッド
+    @classmethod
+    def create_for_testing(cls, mock_api_client=None, mock_credential_manager=None):
+        """テスト用のインスタンスを作成
+        
+        Args:
+            mock_api_client: モックされたAPIクライアント
+            mock_credential_manager: モックされた認証情報管理
+            
+        Returns:
+            BlueskyClient: テスト用設定済みインスタンス
+        """
+        # モックされたコンポーネントを使用してインスタンス作成
+        api_client = mock_api_client or BlueskyApiClient()
+        
+        # 他のコンポーネントもモック対応で作成
+        session_manager = BlueskySessionManager(api_client)
+        auth_manager = BlueskyAuthManager(api_client, session_manager)
+        error_handler = UnifiedErrorHandler(auth_manager)
+        user_manager = BlueskyUserManager(api_client, auth_manager)
+        
+        return cls(
+            api_client=api_client,
+            session_manager=session_manager,
+            auth_manager=auth_manager,
+            error_handler=error_handler,
+            user_manager=user_manager
+        )
+    
+    @classmethod  
+    def create_with_custom_credential_manager(cls, credential_manager):
+        """カスタム認証情報管理を使用するインスタンスを作成
+        
+        Args:
+            credential_manager: カスタム認証情報管理インスタンス
+            
+        Returns:
+            BlueskyClient: カスタム設定済みインスタンス
+        """
+        # 認証情報管理が注入されたAPIクライアントを作成
+        api_client = BlueskyApiClient()
+        
+        # 他のコンポーネントも作成
+        session_manager = BlueskySessionManager(api_client)
+        auth_manager = BlueskyAuthManager(api_client, session_manager)
+        error_handler = UnifiedErrorHandler(auth_manager)
+        user_manager = BlueskyUserManager(api_client, auth_manager)
+        
+        # 認証情報管理を注入 (実際のauth_managerの実装に応じて調整が必要)
+        # auth_manager.credential_manager = credential_manager
+        
+        return cls(
+            api_client=api_client,
+            session_manager=session_manager,
+            auth_manager=auth_manager,
+            error_handler=error_handler,
+            user_manager=user_manager
+        )
     
     @property
     def profile(self):
