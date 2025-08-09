@@ -106,5 +106,38 @@
     "followers_list": "Please login to view followers list",
     "muted_users": "Please login to view muted users list",
     "blocked_users": "Please login to view blocked users list"
+  },
+  "settings": {
+    "title": "Settings",
+    "categories": {
+      "timeline": "Timeline",
+      "post": "Post",
+      "language": "Language",
+      "advanced": "Advanced"
+    },
+    "language": {
+      "label": "Display Language:",
+      "description": "Changing the language will switch the display language of menus and dialogs.\nLanguage changes take effect immediately."
+    },
+    "advanced": {
+      "enable_debug_log": "Enable debug logging (takes effect after restart)",
+      "debug_log_description": "Enabling debug logging will output detailed logs.\nThis is useful when reporting issues to developers.\nThis setting takes effect after restarting the application."
+    },
+    "timeline": {
+      "fetch_count_label": "Number of posts to fetch:",
+      "fetch_count_description": "(1-100 posts)",
+      "auto_fetch_label": "Automatically fetch timeline posts",
+      "fetch_interval_label": "Auto-fetch interval:",
+      "fetch_interval_description": "seconds (minimum 180 seconds)"
+    },
+    "post": {
+      "show_completion_dialog": "Show completion dialog for post/reply/quote"
+    },
+    "messages": {
+      "save_error": "Failed to save settings.\nPlease check the logs for details.",
+      "save_error_title": "Save Error",
+      "save_exception": "An error occurred while saving settings.\n{error}",
+      "save_exception_title": "Error"
+    }
   }
 }

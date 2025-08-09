@@ -106,5 +106,38 @@
     "followers_list": "フォロワー一覧を表示するにはログインしてください",
     "muted_users": "ミュートしたユーザー一覧を表示するにはログインしてください",
     "blocked_users": "ブロックしたユーザー一覧を表示するにはログインしてください"
+  },
+  "settings": {
+    "title": "設定",
+    "categories": {
+      "timeline": "投稿一覧",
+      "post": "投稿",
+      "language": "言語",
+      "advanced": "高度な設定"
+    },
+    "language": {
+      "label": "表示言語:",
+      "description": "言語を変更すると、メニューやダイアログの表示言語が切り替わります。\n言語変更は即座に反映されます。"
+    },
+    "advanced": {
+      "enable_debug_log": "デバッグログを有効にする（再起動後に反映）",
+      "debug_log_description": "デバッグログを有効にすると、詳細なログが出力されます。\n問題が発生した場合に開発者に報告する際に役立ちます。\nこの設定は再起動後に反映されます。"
+    },
+    "timeline": {
+      "fetch_count_label": "投稿の取得件数:",
+      "fetch_count_description": "(1-100件)",
+      "auto_fetch_label": "投稿一覧を自動取得する",
+      "fetch_interval_label": "自動取得の間隔:",
+      "fetch_interval_description": "秒（最小180秒）"
+    },
+    "post": {
+      "show_completion_dialog": "投稿・返信・引用時に完了ダイアログを表示する"
+    },
+    "messages": {
+      "save_error": "設定の保存に失敗しました。\n詳細はログを確認してください。",
+      "save_error_title": "保存エラー",
+      "save_exception": "設定の保存中にエラーが発生しました。\n{error}",
+      "save_exception_title": "エラー"
+    }
   }
 }

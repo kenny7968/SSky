@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import logging
 from .base_dialog import BaseDialog
+from utils.i18n import get_i18n
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -22,9 +23,12 @@ class SettingsDialog(BaseDialog):
         Args:
             parent: 親ウィンドウ
         """
+        # 国際化システムの取得
+        self.i18n = get_i18n()
+        
         super().__init__(
             parent,
-            title="設定",
+            title=self.i18n.get_message("settings.title"),
             size=(500, 400)
         )
         
@@ -44,6 +48,9 @@ class SettingsDialog(BaseDialog):
             },
             'post': {
                 'show_completion_dialog': self.settings_manager.get('post.show_completion_dialog', True)
+            },
+            'language': {
+                'locale': self.settings_manager.get('language.locale', 'ja')
             },
             'advanced': {
                 'enable_debug_log': self.settings_manager.get('advanced.enable_debug_log', False)
@@ -86,10 +93,11 @@ class SettingsDialog(BaseDialog):
         self.settings_panel = wx.Panel(splitter)
         
         # カテゴリツリーの作成
-        root = self.tree.AddRoot("設定")
-        timeline_item = self.tree.AppendItem(root, "投稿一覧")
-        post_item = self.tree.AppendItem(root, "投稿")
-        advanced_item = self.tree.AppendItem(root, "高度な設定")
+        root = self.tree.AddRoot(self.i18n.get_message("settings.title"))
+        timeline_item = self.tree.AppendItem(root, self.i18n.get_message("settings.categories.timeline"))
+        post_item = self.tree.AppendItem(root, self.i18n.get_message("settings.categories.post"))
+        language_item = self.tree.AppendItem(root, self.i18n.get_message("settings.categories.language"))
+        advanced_item = self.tree.AppendItem(root, self.i18n.get_message("settings.categories.advanced"))
         
         # 最初のカテゴリを選択
         self.tree.SelectItem(timeline_item)
@@ -103,8 +111,8 @@ class SettingsDialog(BaseDialog):
         
         # ボタン
         button_sizer = wx.StdDialogButtonSizer()
-        self.ok_button = wx.Button(panel, wx.ID_OK, "OK")
-        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
+        self.ok_button = wx.Button(panel, wx.ID_OK, self.i18n.get_message("button.ok"))
+        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, self.i18n.get_message("button.cancel"))
         
         button_sizer.AddButton(self.ok_button)
         button_sizer.AddButton(self.cancel_button)
@@ -147,11 +155,13 @@ class SettingsDialog(BaseDialog):
         item = event.GetItem()
         text = self.tree.GetItemText(item)
         
-        if text == "投稿一覧":
+        if text == self.i18n.get_message("settings.categories.timeline"):
             self.show_timeline_settings()
-        elif text == "投稿":
+        elif text == self.i18n.get_message("settings.categories.post"):
             self.show_post_settings()
-        elif text == "高度な設定":
+        elif text == self.i18n.get_message("settings.categories.language"):
+            self.show_language_settings()
+        elif text == self.i18n.get_message("settings.categories.advanced"):
             self.show_advanced_settings()
             
     def show_advanced_settings(self):
@@ -166,16 +176,14 @@ class SettingsDialog(BaseDialog):
         # デバッグログの設定
         self.enable_debug_log_cb = wx.CheckBox(
             self.settings_panel,
-            label="デバッグログを有効にする（再起動後に反映）"
+            label=self.i18n.get_message("settings.advanced.enable_debug_log")
         )
         sizer.Add(self.enable_debug_log_cb, 0, wx.ALL, 10)
         
         # 説明文（リードオンリーのテキストボックス）
         description = wx.TextCtrl(
             self.settings_panel,
-            value="デバッグログを有効にすると、詳細なログが出力されます。\n"
-                  "問題が発生した場合に開発者に報告する際に役立ちます。\n"
-                  "この設定は再起動後に反映されます。",
+            value=self.i18n.get_message("settings.advanced.debug_log_description"),
             style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_NO_VSCROLL
         )
         # テキストボックスのサイズを適切に設定
@@ -209,6 +217,98 @@ class SettingsDialog(BaseDialog):
         # キャッシュに値を保存
         self.settings_cache['advanced']['enable_debug_log'] = enabled
         logger.debug(f"デバッグログの有効/無効を変更しました: {enabled}")
+    
+    def show_language_settings(self):
+        """言語設定項目を表示"""
+        # 現在の設定パネルの子ウィジェットをクリア
+        for child in self.settings_panel.GetChildren():
+            child.Destroy()
+        
+        # 設定項目の作成
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # 言語選択
+        language_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        language_label = wx.StaticText(self.settings_panel, label=self.i18n.get_message("settings.language.label"))
+        language_sizer.Add(language_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
+        
+        # 言語選択コンボボックス
+        self.language_choice = wx.Choice(self.settings_panel)
+        
+        # 利用可能な言語を取得してコンボボックスに追加
+        available_languages = self.settings_manager.get_available_languages()
+        for locale_code, display_name in available_languages:
+            self.language_choice.Append(display_name, locale_code)
+        
+        language_sizer.Add(self.language_choice, 1, wx.EXPAND)
+        sizer.Add(language_sizer, 0, wx.EXPAND | wx.ALL, 10)
+        
+        # 説明文
+        description = wx.TextCtrl(
+            self.settings_panel,
+            value=self.i18n.get_message("settings.language.description"),
+            style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_NO_VSCROLL
+        )
+        description.SetMinSize((-1, 50))
+        sizer.Add(description, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        
+        self.settings_panel.SetSizer(sizer)
+        
+        # 設定値の読み込み（キャッシュから）
+        current_locale = self.settings_cache['language']['locale']
+        for i in range(self.language_choice.GetCount()):
+            if self.language_choice.GetClientData(i) == current_locale:
+                self.language_choice.SetSelection(i)
+                break
+        
+        # イベントハンドラをバインド
+        self.language_choice.Bind(wx.EVT_CHOICE, self.on_language_changed)
+        
+        self.settings_panel.Layout()
+    
+    def on_language_changed(self, event):
+        """言語が変更されたときの処理
+        
+        Args:
+            event: 選択イベント
+        """
+        # ダイアログが破棄中の場合は何もしない
+        if self.is_being_destroyed:
+            return
+        
+        selection = self.language_choice.GetSelection()
+        if selection != wx.NOT_FOUND:
+            locale_code = self.language_choice.GetClientData(selection)
+            
+            # キャッシュに値を保存
+            self.settings_cache['language']['locale'] = locale_code
+            logger.debug(f"言語を変更しました: {locale_code}")
+            
+            # 即座にI18nシステムを更新
+            try:
+                from utils.i18n import get_i18n
+                i18n = get_i18n()
+                if i18n.set_locale(locale_code):
+                    logger.info(f"言語をリアルタイム更新しました: {locale_code}")
+                    # ダイアログのタイトルと説明文を更新
+                    self.update_language_ui()
+                else:
+                    logger.error(f"言語のリアルタイム更新に失敗しました: {locale_code}")
+            except Exception as e:
+                logger.error(f"言語更新中にエラーが発生しました: {str(e)}")
+    
+    def update_language_ui(self):
+        """言語変更時のUI更新"""
+        try:
+            # 現在表示中のカテゴリを再表示して言語を反映
+            item = self.tree.GetSelection()
+            if item.IsOk():
+                text = self.tree.GetItemText(item)
+                if text == self.i18n.get_message("settings.categories.language"):
+                    # 言語設定画面の説明文を更新
+                    self.show_language_settings()
+        except Exception as e:
+            logger.warning(f"UIの言語更新に失敗しました: {str(e)}")
     
     def show_timeline_settings(self):
         """投稿一覧の設定項目を表示"""
@@ -442,12 +542,13 @@ class SettingsDialog(BaseDialog):
             auto_fetch = self.settings_cache['timeline']['auto_fetch']
             fetch_interval = self.settings_cache['timeline']['fetch_interval']
             show_completion_dialog = self.settings_cache['post']['show_completion_dialog']
+            locale = self.settings_cache['language']['locale']
             enable_debug_log = self.settings_cache['advanced']['enable_debug_log']
             
             # 設定値の詳細をログに出力
             logger.debug(f"保存する設定値: timeline.fetch_count={fetch_count}, timeline.auto_fetch={auto_fetch}, "
                          f"timeline.fetch_interval={fetch_interval}, post.show_completion_dialog={show_completion_dialog}, "
-                         f"advanced.enable_debug_log={enable_debug_log}")
+                         f"language.locale={locale}, advanced.enable_debug_log={enable_debug_log}")
             
             # バリデーション
             if fetch_count < 1 or fetch_count > 100:
@@ -470,6 +571,12 @@ class SettingsDialog(BaseDialog):
             self.settings_manager.set('timeline.auto_fetch', auto_fetch)
             self.settings_manager.set('timeline.fetch_interval', fetch_interval)
             self.settings_manager.set('post.show_completion_dialog', show_completion_dialog)
+            
+            # 言語設定の保存（バリデーション付きで設定）
+            success_lang, error_msg = self.settings_manager.set_with_validation('language.locale', locale)
+            if not success_lang:
+                logger.warning(f"言語設定の保存に失敗しました: {error_msg}")
+            
             self.settings_manager.set('advanced.enable_debug_log', enable_debug_log)
             
             # 設定ファイルに保存
@@ -478,11 +585,11 @@ class SettingsDialog(BaseDialog):
             logger.debug(f"settings_manager.save()の結果: {success}")
             
             if not success:
-                error_msg = "設定の保存に失敗しました。\n詳細はログを確認してください。"
+                error_msg = self.i18n.get_message("settings.messages.save_error")
                 logger.error(error_msg)
                 wx.MessageBox(
                     error_msg,
-                    "保存エラー",
+                    self.i18n.get_message("settings.messages.save_error_title"),
                     wx.OK | wx.ICON_ERROR
                 )
             else:
@@ -497,8 +604,8 @@ class SettingsDialog(BaseDialog):
             
             # エラーメッセージを表示
             wx.MessageBox(
-                f"設定の保存中にエラーが発生しました。\n{str(e)}",
-                "エラー",
+                self.i18n.get_message("settings.messages.save_exception", error=str(e)),
+                self.i18n.get_message("settings.messages.save_exception_title"),
                 wx.OK | wx.ICON_ERROR
             )
             return False
