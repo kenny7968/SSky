@@ -69,7 +69,7 @@ class BasePostDialog(BaseDialog):
     def handle_escape_key(self):
         """Escキー処理"""
         if self.text_ctrl and self.text_ctrl.GetValue().strip():
-            if self.confirm("投稿内容が入力されています。本当に閉じますか？"):
+            if self.confirm(self.i18n.get_message("dialog.confirm_close_with_content")):
                 self.EndModal(wx.ID_CANCEL)
         else:
             self.EndModal(wx.ID_CANCEL)
@@ -88,7 +88,7 @@ class BasePostDialog(BaseDialog):
     
     def show_validation_error(self):
         """検証エラーメッセージの表示"""
-        self.show_error("投稿内容を入力してください")
+        self.show_error(self.i18n.get_message("error.post_content_required"))
     
     def update_char_count(self):
         """文字数カウント更新"""
@@ -107,7 +107,7 @@ class BasePostDialog(BaseDialog):
         else:
             self.char_count_label.SetForegroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOWTEXT))
     
-    def create_text_input_area(self, panel, label_text="投稿内容:"):
+    def create_text_input_area(self, panel, label_text=None):
         """テキスト入力エリアの作成
         
         Args:
@@ -120,6 +120,8 @@ class BasePostDialog(BaseDialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         # ラベル
+        if label_text is None:
+            label_text = self.i18n.get_message("dialog.post_content_label")
         label = wx.StaticText(panel, label=label_text)
         sizer.Add(label, 0, wx.ALL | wx.EXPAND, 5)
         
@@ -144,7 +146,7 @@ class BasePostDialog(BaseDialog):
         self.update_char_count()
         return self.char_count_label
     
-    def create_button_area(self, panel, ok_label="送信"):
+    def create_button_area(self, panel, ok_label=None):
         """ボタンエリアの作成
         
         Args:
@@ -155,8 +157,10 @@ class BasePostDialog(BaseDialog):
             wx.StdDialogButtonSizer: 作成されたボタンサイザー
         """
         button_sizer = wx.StdDialogButtonSizer()
+        if ok_label is None:
+            ok_label = self.i18n.get_message("dialog.send_button")
         ok_button = wx.Button(panel, wx.ID_OK, ok_label)
-        cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
+        cancel_button = wx.Button(panel, wx.ID_CANCEL, self.i18n.get_message("button.cancel"))
         button_sizer.AddButton(ok_button)
         button_sizer.AddButton(cancel_button)
         button_sizer.Realize()

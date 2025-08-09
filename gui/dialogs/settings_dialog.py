@@ -287,11 +287,18 @@ class SettingsDialog(BaseDialog):
             # 即座にI18nシステムを更新
             try:
                 from utils.i18n import get_i18n
+                from pubsub import pub
+                from core import events
+                
                 i18n = get_i18n()
                 if i18n.set_locale(locale_code):
                     logger.info(f"言語をリアルタイム更新しました: {locale_code}")
                     # ダイアログのタイトルと説明文を更新
                     self.update_language_ui()
+                    
+                    # 言語変更イベントを発信
+                    pub.sendMessage(events.LANGUAGE_CHANGED, new_locale=locale_code)
+                    logger.info(f"言語変更イベントを発信しました: {locale_code}")
                 else:
                     logger.error(f"言語のリアルタイム更新に失敗しました: {locale_code}")
             except Exception as e:

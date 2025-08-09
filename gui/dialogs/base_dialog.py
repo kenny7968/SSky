@@ -8,6 +8,7 @@ SSky - Blueskyクライアント
 
 import wx
 import logging
+from utils.i18n import get_i18n
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,9 @@ class BaseDialog(wx.Dialog):
             size (tuple): ダイアログサイズ
             **kwargs: その他のwx.Dialogパラメータ
         """
+        # 国際化管理インスタンス
+        self.i18n = get_i18n()
+        
         # デフォルトスタイルを設定
         default_style = wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER
         style = kwargs.pop('style', default_style)
@@ -84,34 +88,40 @@ class BaseDialog(wx.Dialog):
         """
         self.EndModal(wx.ID_CANCEL)
     
-    def show_error(self, message, title="エラー"):
+    def show_error(self, message, title=None):
         """エラーメッセージの統一表示
         
         Args:
             message (str): エラーメッセージ
             title (str): ダイアログタイトル
         """
+        if title is None:
+            title = self.i18n.get_message("error.title")
         wx.MessageBox(message, title, wx.OK | wx.ICON_ERROR)
     
-    def show_warning(self, message, title="警告"):
+    def show_warning(self, message, title=None):
         """警告メッセージの統一表示
         
         Args:
             message (str): 警告メッセージ
             title (str): ダイアログタイトル
         """
+        if title is None:
+            title = self.i18n.get_message("error.warning")
         wx.MessageBox(message, title, wx.OK | wx.ICON_WARNING)
     
-    def show_info(self, message, title="情報"):
+    def show_info(self, message, title=None):
         """情報メッセージの統一表示
         
         Args:
             message (str): 情報メッセージ
             title (str): ダイアログタイトル
         """
+        if title is None:
+            title = self.i18n.get_message("error.info")
         wx.MessageBox(message, title, wx.OK | wx.ICON_INFORMATION)
     
-    def confirm(self, message, title="確認"):
+    def confirm(self, message, title=None):
         """確認ダイアログの統一表示
         
         Args:
@@ -121,6 +131,8 @@ class BaseDialog(wx.Dialog):
         Returns:
             bool: ユーザーが「はい」を選択した場合True
         """
+        if title is None:
+            title = self.i18n.get_message("error.confirm")
         dlg = wx.MessageDialog(
             self,
             message,

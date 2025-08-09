@@ -26,11 +26,15 @@ class PostDetailDialog(BaseDialog):
             parent: 親ウィンドウ
             post_data (dict): 投稿データ
         """
+        # 一時的にデフォルトタイトルでBaseDialogを初期化
         super(PostDetailDialog, self).__init__(
             parent, 
-            title=f"{post_data['username']}の投稿",
+            title=f"Post by {post_data['username']}",
             size=(500, 300)
         )
+        
+        # i18nが初期化された後でタイトルを更新
+        self.SetTitle(self.i18n.get_message("dialog.post_detail_title", username=post_data['username']))
         
         self.post_data = post_data
         
@@ -141,13 +145,13 @@ class PostDetailDialog(BaseDialog):
         # 引用ポストの場合は引用元情報も表示
         if self.post_data.get('is_quote_post', False) and self.post_data.get('quote_of'):
             quote_info = self.post_data['quote_of']
-            content_text += f"\n【引用元】\n"
+            content_text += f"\n【{self.i18n.get_message('dialog.post_detail_quoted_from')}】\n"
             content_text += f"{quote_info['username']} {quote_info['handle']}\n"
             content_text += f"{quote_info['content']}\n"
             if 'like_count' in quote_info and 'repost_count' in quote_info:
-                content_text += f"いいね: {quote_info['like_count']}  リポスト: {quote_info['repost_count']}\n"
+                content_text += f"{self.i18n.get_message('dialog.post_detail_likes')}: {quote_info['like_count']}  {self.i18n.get_message('dialog.post_detail_reposts')}: {quote_info['repost_count']}\n"
         
-        content_text += f"\nいいね: {self.post_data['likes']}  返信: {self.post_data['replies']}  リポスト: {self.post_data['reposts']}"
+        content_text += f"\n{self.i18n.get_message('dialog.post_detail_likes')}: {self.post_data['likes']}  {self.i18n.get_message('dialog.post_detail_replies')}: {self.post_data['replies']}  {self.i18n.get_message('dialog.post_detail_reposts')}: {self.post_data['reposts']}"
         
         self.content = wx.TextCtrl(
             panel, 
@@ -172,17 +176,17 @@ class PostDetailDialog(BaseDialog):
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         # いいねボタン
-        like_btn = wx.Button(panel, label="いいね", size=(80, -1))
+        like_btn = wx.Button(panel, label=self.i18n.get_message("menu.like").split('(')[0].strip(), size=(80, -1))
         like_btn.Bind(wx.EVT_BUTTON, self.on_like)
         button_sizer.Add(like_btn, 0, wx.ALL, 5)
         
         # 返信ボタン
-        reply_btn = wx.Button(panel, label="返信", size=(80, -1))
+        reply_btn = wx.Button(panel, label=self.i18n.get_message("menu.reply").split('(')[0].strip(), size=(80, -1))
         reply_btn.Bind(wx.EVT_BUTTON, self.on_reply)
         button_sizer.Add(reply_btn, 0, wx.ALL, 5)
         
         # リポストボタン
-        repost_btn = wx.Button(panel, label="リポスト", size=(80, -1))
+        repost_btn = wx.Button(panel, label=self.i18n.get_message("menu.repost").split('(')[0].strip(), size=(80, -1))
         repost_btn.Bind(wx.EVT_BUTTON, self.on_repost)
         # 自分の投稿はリポストできない
         if self.post_data.get('is_own_post', False):
@@ -190,12 +194,12 @@ class PostDetailDialog(BaseDialog):
         button_sizer.Add(repost_btn, 0, wx.ALL, 5)
         
         # 引用ボタン
-        quote_btn = wx.Button(panel, label="引用", size=(80, -1))
+        quote_btn = wx.Button(panel, label=self.i18n.get_message("menu.quote").split('(')[0].strip(), size=(80, -1))
         quote_btn.Bind(wx.EVT_BUTTON, self.on_quote)
         button_sizer.Add(quote_btn, 0, wx.ALL, 5)
         
         # 閉じるボタン
-        close_btn = wx.Button(panel, wx.ID_CLOSE, "閉じる")
+        close_btn = wx.Button(panel, wx.ID_CLOSE, self.i18n.get_message("button.close"))
         close_btn.Bind(wx.EVT_BUTTON, self.on_close)
         button_sizer.Add(close_btn, 0, wx.ALL, 5)
         

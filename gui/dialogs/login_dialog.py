@@ -22,11 +22,15 @@ class LoginDialog(BaseDialog):
         Args:
             parent: 親ウィンドウ
         """
+        # 一時的にデフォルトタイトルでBaseDialogを初期化
         super(LoginDialog, self).__init__(
             parent, 
-            title="Blueskyにログイン", 
+            title="Login to Bluesky", 
             size=(400, 200)
         )
+        
+        # i18nが初期化された後でタイトルを更新
+        self.SetTitle(self.i18n.get_message("dialog.login"))
         
         # UIの初期化
         self.init_ui()
@@ -38,21 +42,21 @@ class LoginDialog(BaseDialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         # ユーザー名入力
-        username_label = wx.StaticText(panel, label="ユーザー名（例: username.bsky.social）:")
+        username_label = wx.StaticText(panel, label=self.i18n.get_message("dialog.username_label"))
         sizer.Add(username_label, 0, wx.ALL | wx.EXPAND, 5)
         self.username_ctrl = wx.TextCtrl(panel)
         sizer.Add(self.username_ctrl, 0, wx.ALL | wx.EXPAND, 5)
         
         # パスワード入力
-        password_label = wx.StaticText(panel, label="アプリパスワード:")
+        password_label = wx.StaticText(panel, label=self.i18n.get_message("dialog.password_label"))
         sizer.Add(password_label, 0, wx.ALL | wx.EXPAND, 5)
         self.password_ctrl = wx.TextCtrl(panel, style=wx.TE_PASSWORD)
         sizer.Add(self.password_ctrl, 0, wx.ALL | wx.EXPAND, 5)
         
         # ボタン
         button_sizer = wx.StdDialogButtonSizer()
-        ok_button = wx.Button(panel, wx.ID_OK, "ログイン")
-        cancel_button = wx.Button(panel, wx.ID_CANCEL, "キャンセル")
+        ok_button = wx.Button(panel, wx.ID_OK, self.i18n.get_message("dialog.login_button"))
+        cancel_button = wx.Button(panel, wx.ID_CANCEL, self.i18n.get_message("button.cancel"))
         button_sizer.AddButton(ok_button)
         button_sizer.AddButton(cancel_button)
         button_sizer.Realize()

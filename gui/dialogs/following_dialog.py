@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import logging
 from gui.dialogs.user_list_dialog import UserListDialog
+from utils.i18n import get_i18n
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -23,10 +24,11 @@ class FollowingDialog(UserListDialog):
             parent: 親ウィンドウ
             client: Blueskyクライアント
         """
+        i18n = get_i18n()
         super(FollowingDialog, self).__init__(
             parent, 
             client,
-            title=f"{client.profile.handle}のフォロー中ユーザー",
+            title=i18n.get_message("dialog.following_title").format(handle=client.profile.handle),
             size=(600, 500)
         )
         
@@ -44,9 +46,9 @@ class FollowingDialog(UserListDialog):
         
         try:
             # ローディング表示
-            self.load_more_btn.SetLabel("読み込み中...")
+            self.load_more_btn.SetLabel(self.i18n.get_message("button.loading"))
             self.load_more_btn.Enable(False)
-            self.update_status("読み込み中...", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("button.loading"), len(self.list_ctrl.users))
             
             # フォロー中ユーザー一覧を取得
             result = self.client.get_following(self.client.profile.handle, limit=100, cursor=self.cursor)
@@ -88,23 +90,23 @@ class FollowingDialog(UserListDialog):
             
             # もっと読み込むボタンの状態を更新
             if self.cursor:
-                self.load_more_btn.SetLabel("もっと読み込む")
+                self.load_more_btn.SetLabel(self.i18n.get_message("button.load_more"))
                 self.load_more_btn.Enable(True)
             else:
-                self.load_more_btn.SetLabel("これ以上ありません")
+                self.load_more_btn.SetLabel(self.i18n.get_message("button.no_more"))
                 self.load_more_btn.Enable(False)
                 
             # ステータスを更新
-            self.update_status("フォロー中ユーザー", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("dialog.following_status"), len(self.list_ctrl.users))
                 
             logger.info(f"フォロー中ユーザー一覧を取得しました: {len(result.follows)}件")
             
         except Exception as e:
             logger.error(f"フォロー中ユーザー一覧の取得に失敗しました: {str(e)}")
-            wx.MessageBox(f"フォロー中ユーザー一覧の取得に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-            self.load_more_btn.SetLabel("もっと読み込む")
+            wx.MessageBox(self.i18n.get_message("dialog.following_fetch_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
+            self.load_more_btn.SetLabel(self.i18n.get_message("button.load_more"))
             self.load_more_btn.Enable(True)
-            self.update_status("読み込みエラー", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("dialog.load_error"), len(self.list_ctrl.users))
         
         finally:
             self.is_loading = False

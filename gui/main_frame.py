@@ -66,6 +66,7 @@ class MainFrame(wx.Frame):
 
         # PubSubイベントの購読設定
         self._subscribe_auth_events()
+        self._subscribe_language_events()
 
         # 中央に配置
         self.Centre()
@@ -98,7 +99,7 @@ class MainFrame(wx.Frame):
         panel.SetSizer(main_sizer)
         
     def create_menu_bar(self):
-        """メニューバーの作成"""
+        """メニューバーの作成（言語対応）"""
         menubar = wx.MenuBar()
         i18n = get_i18n()
         
@@ -106,7 +107,6 @@ class MainFrame(wx.Frame):
         app_menu = wx.Menu()
         self.login_item = app_menu.Append(wx.ID_ANY, i18n.get_message("menu.login"), i18n.get_message("menu_help.login"))
         self.logout_item = app_menu.Append(wx.ID_ANY, i18n.get_message("menu.logout"), i18n.get_message("menu_help.logout"))
-        self.logout_item.Enable(False)  # 初期状態では無効
         app_menu.AppendSeparator()  # 区切り線
         reset_db_item = app_menu.Append(wx.ID_ANY, i18n.get_message("menu.reset_database"), i18n.get_message("menu_help.reset_database"))
         app_menu.AppendSeparator()  # 区切り線
@@ -145,25 +145,30 @@ class MainFrame(wx.Frame):
         # メニューバーをフレームに設定
         self.SetMenuBar(menubar)
         
-        # イベントバインド (認証関連)
-        self.Bind(wx.EVT_MENU, self._on_login_menu_select, self.login_item) # MainFrameのメソッドに変更
-        self.Bind(wx.EVT_MENU, self._on_logout_menu_select, self.logout_item) # MainFrameのメソッドに変更
+        # イベントバインド
+        self.Bind(wx.EVT_MENU, self.on_login, self.login_item)
+        self.Bind(wx.EVT_MENU, self.on_logout, self.logout_item)
         self.Bind(wx.EVT_MENU, self.on_reset_database, reset_db_item)
         self.Bind(wx.EVT_MENU, self.on_exit, exit_item)
-        # イベントバインド (ポスト関連)
+        
         self.Bind(wx.EVT_MENU, self.post_handlers.on_new_post, new_post_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_like, like_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_reply, reply_item)
-        self.Bind(wx.EVT_MENU, self.post_handlers.on_quote, quote_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_repost, repost_item)
-        self.Bind(wx.EVT_MENU, self.on_open_url, open_url_item)
+        self.Bind(wx.EVT_MENU, self.post_handlers.on_quote, quote_item)
+        # self.Bind(wx.EVT_MENU, self.post_handlers.on_open_url, open_url_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_delete, delete_item)
         self.Bind(wx.EVT_MENU, self.post_handlers.on_profile, profile_item)
+        
         self.Bind(wx.EVT_MENU, self.on_settings, settings_item)
+        
         self.Bind(wx.EVT_MENU, self.on_following_list, following_item)
         self.Bind(wx.EVT_MENU, self.on_followers_list, followers_item)
         self.Bind(wx.EVT_MENU, self.on_muted_users_list, muted_users_item)
         self.Bind(wx.EVT_MENU, self.on_blocked_users_list, blocked_users_item)
+        
+        # ログイン状態に応じたメニューの有効/無効化
+        self.update_menu_state()
 
     # --- PubSub Event Handlers ---
 
@@ -178,6 +183,10 @@ class MainFrame(wx.Frame):
         # 必要に応じて他のイベントも購読
         # pub.subscribe(self._on_login_attempt, events.AUTH_LOGIN_ATTEMPT)
         # pub.subscribe(self._on_session_saved, events.AUTH_SESSION_SAVED)
+    
+    def _subscribe_language_events(self):
+        """言語変更関連のPubSubイベントを購読"""
+        pub.subscribe(self._on_language_changed, events.LANGUAGE_CHANGED)
         # pub.subscribe(self._on_session_deleted, events.AUTH_SESSION_DELETED)
         logger.debug("Subscribed to authentication events.")
 
@@ -306,7 +315,7 @@ class MainFrame(wx.Frame):
         Args:
             event: メニューイベント
         """
-        self.Close()
+        self.Close(True)
         
     def OnClose(self, event):
         """ウィンドウが閉じられる前の処理
@@ -527,3 +536,78 @@ class MainFrame(wx.Frame):
         dialog = BlockedUsersDialog(self, self.client)
         dialog.ShowModal()
         dialog.Destroy()
+    
+    def _on_language_changed(self, new_locale):
+        """言語変更イベントハンドラー
+        
+        Args:
+            new_locale (str): 新しいロケール
+        """
+        logger.info(f"MainFrame: 言語変更イベントを受信しました: {new_locale}")
+        try:
+            # メニューバーとステータスバーの再構築
+            self.update_ui_language()
+            logger.debug("MainFrameのUI言語更新が完了しました")
+        except Exception as e:
+            logger.error(f"MainFrameのUI言語更新中にエラーが発生しました: {str(e)}")
+    
+    def update_ui_language(self):
+        """UI言語を更新（メニューバー、ステータスバーなど）"""
+        try:
+            # 現在のメニューバーを保存（イベントハンドラーのバインディング情報を保持）
+            old_menubar = self.GetMenuBar()
+            
+            # 新しいメニューバーを作成
+            self.create_menu_bar()
+            
+            # 古いメニューバーを破棄
+            if old_menubar:
+                old_menubar.Destroy()
+            
+            # ステータスバーの更新（現在のログイン状態に応じて）
+            if hasattr(self, 'client') and self.client.is_authenticated():
+                profile = self.client.get_current_profile()
+                if profile:
+                    i18n = get_i18n()
+                    self.statusbar.SetStatusText(i18n.get_message("status.logged_in_as", handle=profile.handle))
+            
+            # レイアウトの更新
+            self.Layout()
+            logger.debug("UI言語更新が完了しました")
+            
+        except Exception as e:
+            logger.error(f"UI言語更新中にエラーが発生しました: {str(e)}")
+    
+    
+    def update_menu_state(self):
+        """メニュー項目の有効/無効状態を更新"""
+        try:
+            is_authenticated = self.client.is_authenticated() if self.client else False
+            
+            # ログイン/ログアウトメニューの状態
+            self.login_item.Enable(not is_authenticated)
+            self.logout_item.Enable(is_authenticated)
+            
+        except Exception as e:
+            logger.error(f"メニュー状態更新エラー: {str(e)}")
+    
+    def on_login(self, event):
+        """ログインメニューイベントハンドラー
+        
+        Args:
+            event: メニューイベント
+        """
+        self.auth_service.show_login_dialog(self)
+    
+    def on_logout(self, event):
+        """ログアウトメニューイベントハンドラー
+        
+        Args:
+            event: メニューイベント
+        """
+        # ログアウト処理を実装
+        try:
+            self.client.logout()
+            # ログアウト成功イベントは自動的に発信される
+        except Exception as e:
+            logger.error(f"ログアウト処理でエラーが発生しました: {str(e)}")

@@ -10,6 +10,7 @@ import wx
 import wx.lib.mixins.listctrl as listmix
 import logging
 import weakref
+from utils.i18n import get_i18n
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -26,6 +27,9 @@ class UserListDialog(wx.Dialog):
             title (str): ダイアログタイトル
             size (tuple): ウィンドウサイズ
         """
+        # 国際化管理インスタンス
+        self.i18n = get_i18n()
+        
         super(UserListDialog, self).__init__(
             parent, 
             title=title,
@@ -34,6 +38,7 @@ class UserListDialog(wx.Dialog):
         )
         
         self.client = client
+        self.i18n = get_i18n()
         self.cursor = None  # ページネーション用カーソル
         self.is_loading = False  # 読み込み中フラグ
         
@@ -69,7 +74,7 @@ class UserListDialog(wx.Dialog):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         
         # ステータスラベル
-        self.status_label = wx.StaticText(panel, label="読み込み中...", style=wx.ALIGN_CENTER)
+        self.status_label = wx.StaticText(panel, label=self.i18n.get_message("button.loading"), style=wx.ALIGN_CENTER)
         main_sizer.Add(self.status_label, 0, wx.EXPAND | wx.ALL, 5)
         
         # リストコントロール
@@ -80,29 +85,29 @@ class UserListDialog(wx.Dialog):
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         # フォロー/フォロー解除ボタン
-        self.follow_btn = wx.Button(panel, label="フォロー", size=(120, -1))
+        self.follow_btn = wx.Button(panel, label=self.i18n.get_message("dialog.follow_button"), size=(120, -1))
         self.follow_btn.Bind(wx.EVT_BUTTON, self.on_follow)
         button_sizer.Add(self.follow_btn, 0, wx.ALL, 5)
         
         # ミュート/ミュート解除ボタン
-        self.mute_btn = wx.Button(panel, label="ミュート", size=(120, -1))
+        self.mute_btn = wx.Button(panel, label=self.i18n.get_message("dialog.mute_button"), size=(120, -1))
         self.mute_btn.Bind(wx.EVT_BUTTON, self.on_mute)
         button_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
         
         # ブロック/ブロック解除ボタン
-        self.block_btn = wx.Button(panel, label="ブロック", size=(120, -1))
+        self.block_btn = wx.Button(panel, label=self.i18n.get_message("dialog.block_button"), size=(120, -1))
         self.block_btn.Bind(wx.EVT_BUTTON, self.on_block)
         button_sizer.Add(self.block_btn, 0, wx.ALL, 5)
         
         # 閉じるボタン
-        close_btn = wx.Button(panel, wx.ID_CLOSE, "閉じる")
+        close_btn = wx.Button(panel, wx.ID_CLOSE, self.i18n.get_message("button.close"))
         close_btn.Bind(wx.EVT_BUTTON, self.on_close)
         button_sizer.Add(close_btn, 0, wx.ALL, 5)
         
         main_sizer.Add(button_sizer, 0, wx.ALIGN_CENTER | wx.ALL, 10)
         
         # もっと読み込むボタン
-        self.load_more_btn = wx.Button(panel, label="もっと読み込む", size=(150, -1))
+        self.load_more_btn = wx.Button(panel, label=self.i18n.get_message("button.load_more"), size=(150, -1))
         self.load_more_btn.Bind(wx.EVT_BUTTON, self.on_load_more)
         main_sizer.Add(self.load_more_btn, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
         
@@ -144,21 +149,21 @@ class UserListDialog(wx.Dialog):
             
         # フォロー状態に応じてボタンラベルを設定
         if user.get('is_following', False):
-            self.follow_btn.SetLabel("フォロー解除")
+            self.follow_btn.SetLabel(self.i18n.get_message("dialog.unfollow_button"))
         else:
-            self.follow_btn.SetLabel("フォロー")
+            self.follow_btn.SetLabel(self.i18n.get_message("dialog.follow_button"))
             
         # ミュート状態に応じてボタンラベルを設定
         if user.get('is_muted', False):
-            self.mute_btn.SetLabel("ミュート解除")
+            self.mute_btn.SetLabel(self.i18n.get_message("dialog.unmute_button"))
         else:
-            self.mute_btn.SetLabel("ミュート")
+            self.mute_btn.SetLabel(self.i18n.get_message("dialog.mute_button"))
             
         # ブロック状態に応じてボタンラベルを設定
         if user.get('is_blocked', False):
-            self.block_btn.SetLabel("ブロック解除")
+            self.block_btn.SetLabel(self.i18n.get_message("dialog.unblock_button"))
         else:
-            self.block_btn.SetLabel("ブロック")
+            self.block_btn.SetLabel(self.i18n.get_message("dialog.block_button"))
             
         # ボタンを有効化
         self.follow_btn.Enable(True)
@@ -182,14 +187,14 @@ class UserListDialog(wx.Dialog):
                 # フォロー解除
                 self.client.unfollow(handle)
                 selected_user['is_following'] = False
-                wx.MessageBox(f"{selected_user['display_name']}のフォローを解除しました", 
-                             "フォロー解除完了", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.unfollow_success").format(name=selected_user['display_name']), 
+                             self.i18n.get_message("dialog.unfollow_success_title"), wx.OK | wx.ICON_INFORMATION)
             else:
                 # フォロー
                 self.client.follow(handle)
                 selected_user['is_following'] = True
-                wx.MessageBox(f"{selected_user['display_name']}をフォローしました", 
-                             "フォロー完了", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.follow_success").format(name=selected_user['display_name']), 
+                             self.i18n.get_message("dialog.follow_success_title"), wx.OK | wx.ICON_INFORMATION)
                 
             # ボタンの状態を更新
             self.update_button_states(selected_user)
@@ -199,7 +204,7 @@ class UserListDialog(wx.Dialog):
             
         except Exception as e:
             logger.error(f"フォロー操作に失敗しました: {str(e)}")
-            wx.MessageBox(f"フォロー操作に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("dialog.follow_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
         
     def on_mute(self, event):
         """ミュート/ミュート解除ボタンクリック時の処理
@@ -218,14 +223,14 @@ class UserListDialog(wx.Dialog):
                 # ミュート解除
                 self.client.unmute(handle)
                 selected_user['is_muted'] = False
-                wx.MessageBox(f"{selected_user['display_name']}のミュートを解除しました", 
-                             "ミュート解除完了", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.unmute_success").format(name=selected_user['display_name']), 
+                             self.i18n.get_message("dialog.unmute_success_title"), wx.OK | wx.ICON_INFORMATION)
             else:
                 # ミュート
                 self.client.mute(handle)
                 selected_user['is_muted'] = True
-                wx.MessageBox(f"{selected_user['display_name']}をミュートしました", 
-                             "ミュート完了", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.mute_success").format(name=selected_user['display_name']), 
+                             self.i18n.get_message("dialog.mute_success_title"), wx.OK | wx.ICON_INFORMATION)
                 
             # ボタンの状態を更新
             self.update_button_states(selected_user)
@@ -235,7 +240,7 @@ class UserListDialog(wx.Dialog):
             
         except Exception as e:
             logger.error(f"ミュート操作に失敗しました: {str(e)}")
-            wx.MessageBox(f"ミュート操作に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("dialog.mute_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
         
     def on_block(self, event):
         """ブロック/ブロック解除ボタンクリック時の処理
@@ -254,14 +259,14 @@ class UserListDialog(wx.Dialog):
                 # ブロック解除
                 self.client.unblock(handle)
                 selected_user['is_blocked'] = False
-                wx.MessageBox(f"{selected_user['display_name']}のブロックを解除しました", 
-                             "ブロック解除完了", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.unblock_success").format(name=selected_user['display_name']), 
+                             self.i18n.get_message("dialog.unblock_success_title"), wx.OK | wx.ICON_INFORMATION)
             else:
                 # ブロック
                 self.client.block(handle)
                 selected_user['is_blocked'] = True
-                wx.MessageBox(f"{selected_user['display_name']}をブロックしました", 
-                             "ブロック完了", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.block_success").format(name=selected_user['display_name']), 
+                             self.i18n.get_message("dialog.block_success_title"), wx.OK | wx.ICON_INFORMATION)
                 
             # ボタンの状態を更新
             self.update_button_states(selected_user)
@@ -271,7 +276,7 @@ class UserListDialog(wx.Dialog):
             
         except Exception as e:
             logger.error(f"ブロック操作に失敗しました: {str(e)}")
-            wx.MessageBox(f"ブロック操作に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("dialog.block_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
         
     def on_load_more(self, event):
         """もっと読み込むボタンクリック時の処理
@@ -321,9 +326,9 @@ class UserListDialog(wx.Dialog):
             total (int, optional): 合計件数
         """
         if count is not None and total is not None:
-            status_text = f"{message} ({count}/{total}件)"
+            status_text = f"{message} ({count}/{total}{self.i18n.get_message('dialog.user_list_count_suffix')})"
         elif count is not None:
-            status_text = f"{message} ({count}件)"
+            status_text = f"{message} ({count}{self.i18n.get_message('dialog.user_list_count_suffix')})"
         else:
             status_text = message
             
@@ -348,11 +353,12 @@ class UserListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         
         # 親への弱参照を保持
         self.parent_ref = weakref.ref(parent)
+        self.i18n = get_i18n()
         
         # カラム設定
-        self.InsertColumn(0, "ユーザー名", width=150)
-        self.InsertColumn(1, "ハンドル", width=150)
-        self.InsertColumn(2, "説明", width=300)
+        self.InsertColumn(0, self.i18n.get_message("dialog.user_list_username"), width=150)
+        self.InsertColumn(1, self.i18n.get_message("dialog.user_list_handle"), width=150)
+        self.InsertColumn(2, self.i18n.get_message("dialog.user_list_description"), width=300)
         
         # 選択中のユーザーインデックス
         self.selected_index = -1

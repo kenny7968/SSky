@@ -24,11 +24,15 @@ class ProfileDialog(BaseDialog):
             parent: 親ウィンドウ
             profile_data (object): プロフィールデータ
         """
+        # 一時的にデフォルトタイトルでBaseDialogを初期化
         super(ProfileDialog, self).__init__(
             parent, 
-            title=f"{profile_data.display_name or profile_data.handle}のプロフィール",
+            title=f"Profile: {profile_data.display_name or profile_data.handle}",
             size=(500, 400)
         )
+        
+        # i18nが初期化された後でタイトルを更新
+        self.SetTitle(self.i18n.get_message("dialog.profile_title", name=profile_data.display_name or profile_data.handle))
         
         self.profile_data = profile_data
         
@@ -92,27 +96,27 @@ class ProfileDialog(BaseDialog):
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
         
         # フォローボタン
-        self.follow_btn = wx.Button(panel, label="フォロー", size=(100, -1))
+        self.follow_btn = wx.Button(panel, label=self.i18n.get_message("dialog.follow_button"), size=(100, -1))
         self.follow_btn.Bind(wx.EVT_BUTTON, self.on_follow)
         button_sizer.Add(self.follow_btn, 0, wx.ALL, 5)
         
         # フォロー解除ボタン
-        self.unfollow_btn = wx.Button(panel, label="フォロー解除", size=(100, -1))
+        self.unfollow_btn = wx.Button(panel, label=self.i18n.get_message("dialog.unfollow_button"), size=(100, -1))
         self.unfollow_btn.Bind(wx.EVT_BUTTON, self.on_unfollow)
         button_sizer.Add(self.unfollow_btn, 0, wx.ALL, 5)
         
         # ブロックボタン
-        self.block_btn = wx.Button(panel, label="ブロック", size=(100, -1))
+        self.block_btn = wx.Button(panel, label=self.i18n.get_message("dialog.block_button"), size=(100, -1))
         self.block_btn.Bind(wx.EVT_BUTTON, self.on_block)
         button_sizer.Add(self.block_btn, 0, wx.ALL, 5)
         
         # ミュートボタン
-        self.mute_btn = wx.Button(panel, label="ミュート", size=(100, -1))
+        self.mute_btn = wx.Button(panel, label=self.i18n.get_message("dialog.mute_button"), size=(100, -1))
         self.mute_btn.Bind(wx.EVT_BUTTON, self.on_mute)
         button_sizer.Add(self.mute_btn, 0, wx.ALL, 5)
         
         # 閉じるボタン
-        close_btn = wx.Button(panel, wx.ID_CLOSE, "閉じる")
+        close_btn = wx.Button(panel, wx.ID_CLOSE, self.i18n.get_message("button.close"))
         close_btn.Bind(wx.EVT_BUTTON, self.on_close)
         button_sizer.Add(close_btn, 0, wx.ALL, 5)
         
@@ -132,22 +136,22 @@ class ProfileDialog(BaseDialog):
         profile = self.profile_data
         
         # 基本情報
-        text = f"表示名: {profile.display_name or '未設定'}\n"
-        text += f"ハンドル: @{profile.handle}\n"
+        text = f"{self.i18n.get_message('dialog.profile_display_name')}: {profile.display_name or self.i18n.get_message('dialog.profile_not_set')}\n"
+        text += f"{self.i18n.get_message('dialog.profile_handle')}: @{profile.handle}\n"
         
         # 説明文
         if hasattr(profile, 'description') and profile.description:
-            text += f"\n説明:\n{profile.description}\n"
+            text += f"\n{self.i18n.get_message('dialog.profile_description')}:\n{profile.description}\n"
         
         # フォロワー数・フォロー数
         if hasattr(profile, 'followers_count'):
-            text += f"\nフォロワー: {profile.followers_count or 0}\n"
+            text += f"\n{self.i18n.get_message('dialog.profile_followers')}: {profile.followers_count or 0}\n"
         if hasattr(profile, 'follows_count'):
-            text += f"フォロー: {profile.follows_count or 0}\n"
+            text += f"{self.i18n.get_message('dialog.profile_following')}: {profile.follows_count or 0}\n"
         
         # 投稿数
         if hasattr(profile, 'posts_count'):
-            text += f"投稿数: {profile.posts_count or 0}\n"
+            text += f"{self.i18n.get_message('dialog.profile_posts')}: {profile.posts_count or 0}\n"
         
         return text
         
@@ -182,15 +186,15 @@ class ProfileDialog(BaseDialog):
         
         # ブロックボタンのラベルを設定
         if is_blocked:
-            self.block_btn.SetLabel("ブロック解除")
+            self.block_btn.SetLabel(self.i18n.get_message("dialog.unblock_button"))
         else:
-            self.block_btn.SetLabel("ブロック")
+            self.block_btn.SetLabel(self.i18n.get_message("dialog.block_button"))
             
         # ミュートボタンのラベルを設定
         if is_muted:
-            self.mute_btn.SetLabel("ミュート解除")
+            self.mute_btn.SetLabel(self.i18n.get_message("dialog.unmute_button"))
         else:
-            self.mute_btn.SetLabel("ミュート")
+            self.mute_btn.SetLabel(self.i18n.get_message("dialog.mute_button"))
         
     def on_follow(self, event):
         """フォローボタンクリック時の処理
@@ -199,7 +203,7 @@ class ProfileDialog(BaseDialog):
             event: ボタンイベント
         """
         if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("フォローするにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("error.login_required_follow"), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             return
             
         try:
@@ -208,8 +212,8 @@ class ProfileDialog(BaseDialog):
             self.client.follow(handle)
             
             # 成功メッセージ
-            wx.MessageBox(f"{self.profile_data.display_name or handle}をフォローしました", 
-                         "フォロー完了", wx.OK | wx.ICON_INFORMATION)
+            wx.MessageBox(self.i18n.get_message("dialog.follow_success").format(name=self.profile_data.display_name or handle), 
+                         self.i18n.get_message("dialog.follow_success_title"), wx.OK | wx.ICON_INFORMATION)
             
             # ボタンの状態を更新
             self.follow_btn.Enable(False)
@@ -217,7 +221,7 @@ class ProfileDialog(BaseDialog):
             
         except Exception as e:
             logger.error(f"フォロー処理に失敗しました: {str(e)}")
-            wx.MessageBox(f"フォロー処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("dialog.follow_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
         
     def on_unfollow(self, event):
         """フォロー解除ボタンクリック時の処理
@@ -226,14 +230,14 @@ class ProfileDialog(BaseDialog):
             event: ボタンイベント
         """
         if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("フォロー解除するにはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("error.login_required_unfollow"), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             return
             
         # 確認ダイアログ
         dlg = wx.MessageDialog(
             self,
-            f"{self.profile_data.display_name or self.profile_data.handle}のフォローを解除しますか？",
-            "フォロー解除の確認",
+            self.i18n.get_message("dialog.unfollow_confirm").format(name=self.profile_data.display_name or self.profile_data.handle),
+            self.i18n.get_message("dialog.unfollow_confirm_title"),
             wx.YES_NO | wx.ICON_QUESTION
         )
         
@@ -244,8 +248,8 @@ class ProfileDialog(BaseDialog):
                 self.client.unfollow(handle)
                 
                 # 成功メッセージ
-                wx.MessageBox(f"{self.profile_data.display_name or handle}のフォローを解除しました", 
-                             "フォロー解除完了", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.unfollow_success").format(name=self.profile_data.display_name or handle), 
+                             self.i18n.get_message("dialog.unfollow_success_title"), wx.OK | wx.ICON_INFORMATION)
                 
                 # ボタンの状態を更新
                 self.follow_btn.Enable(True)
@@ -253,7 +257,7 @@ class ProfileDialog(BaseDialog):
                 
             except Exception as e:
                 logger.error(f"フォロー解除処理に失敗しました: {str(e)}")
-                wx.MessageBox(f"フォロー解除処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox(self.i18n.get_message("dialog.unfollow_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
         
         dlg.Destroy()
         
@@ -264,7 +268,7 @@ class ProfileDialog(BaseDialog):
             event: ボタンイベント
         """
         if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("ブロック操作にはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("error.login_required_block"), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             return
             
         handle = self.profile_data.handle
@@ -279,8 +283,8 @@ class ProfileDialog(BaseDialog):
             # ブロック解除の確認ダイアログ
             dlg = wx.MessageDialog(
                 self,
-                f"{display_name}のブロックを解除しますか？",
-                "ブロック解除の確認",
+                self.i18n.get_message("dialog.unblock_confirm").format(name=display_name),
+                self.i18n.get_message("dialog.unblock_confirm_title"),
                 wx.YES_NO | wx.ICON_QUESTION
             )
             
@@ -290,8 +294,8 @@ class ProfileDialog(BaseDialog):
                     self.client.unblock(handle)
                     
                     # 成功メッセージ
-                    wx.MessageBox(f"{display_name}のブロックを解除しました", 
-                                 "ブロック解除完了", wx.OK | wx.ICON_INFORMATION)
+                    wx.MessageBox(self.i18n.get_message("dialog.unblock_success").format(name=display_name), 
+                                 self.i18n.get_message("dialog.unblock_success_title"), wx.OK | wx.ICON_INFORMATION)
                     
                     # ブロック状態を更新
                     if hasattr(self.profile_data, 'viewer'):
@@ -305,15 +309,15 @@ class ProfileDialog(BaseDialog):
                     
                 except Exception as e:
                     logger.error(f"ブロック解除処理に失敗しました: {str(e)}")
-                    wx.MessageBox(f"ブロック解除処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                    wx.MessageBox(self.i18n.get_message("dialog.unblock_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             
             dlg.Destroy()
         else:
             # ブロックの確認ダイアログ
             dlg = wx.MessageDialog(
                 self,
-                f"{display_name}をブロックしますか？\n\nブロックすると、相手のコンテンツが表示されなくなり、相手もあなたのコンテンツを見ることができなくなります。",
-                "ブロックの確認",
+                self.i18n.get_message("dialog.block_confirm").format(name=display_name),
+                self.i18n.get_message("dialog.block_confirm_title"),
                 wx.YES_NO | wx.ICON_QUESTION
             )
             
@@ -323,8 +327,8 @@ class ProfileDialog(BaseDialog):
                     self.client.block(handle)
                     
                     # 成功メッセージ
-                    wx.MessageBox(f"{display_name}をブロックしました", 
-                                 "ブロック完了", wx.OK | wx.ICON_INFORMATION)
+                    wx.MessageBox(self.i18n.get_message("dialog.block_success").format(name=display_name), 
+                                 self.i18n.get_message("dialog.block_success_title"), wx.OK | wx.ICON_INFORMATION)
                     
                     # ブロック状態を更新
                     if hasattr(self.profile_data, 'viewer'):
@@ -338,7 +342,7 @@ class ProfileDialog(BaseDialog):
                     
                 except Exception as e:
                     logger.error(f"ブロック処理に失敗しました: {str(e)}")
-                    wx.MessageBox(f"ブロック処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                    wx.MessageBox(self.i18n.get_message("dialog.block_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             
             dlg.Destroy()
     
@@ -349,7 +353,7 @@ class ProfileDialog(BaseDialog):
             event: ボタンイベント
         """
         if not self.client or not self.client.is_logged_in:
-            wx.MessageBox("ミュート操作にはログインしてください", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("error.login_required_mute"), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             return
             
         handle = self.profile_data.handle
@@ -364,8 +368,8 @@ class ProfileDialog(BaseDialog):
             # ミュート解除の確認ダイアログ
             dlg = wx.MessageDialog(
                 self,
-                f"{display_name}のミュートを解除しますか？",
-                "ミュート解除の確認",
+                self.i18n.get_message("dialog.unmute_confirm").format(name=display_name),
+                self.i18n.get_message("dialog.unmute_confirm_title"),
                 wx.YES_NO | wx.ICON_QUESTION
             )
             
@@ -375,8 +379,8 @@ class ProfileDialog(BaseDialog):
                     self.client.unmute(handle)
                     
                     # 成功メッセージ
-                    wx.MessageBox(f"{display_name}のミュートを解除しました", 
-                                 "ミュート解除完了", wx.OK | wx.ICON_INFORMATION)
+                    wx.MessageBox(self.i18n.get_message("dialog.unmute_success").format(name=display_name), 
+                                 self.i18n.get_message("dialog.unmute_success_title"), wx.OK | wx.ICON_INFORMATION)
                     
                     # ミュート状態を更新
                     if hasattr(self.profile_data, 'viewer'):
@@ -390,15 +394,15 @@ class ProfileDialog(BaseDialog):
                     
                 except Exception as e:
                     logger.error(f"ミュート解除処理に失敗しました: {str(e)}")
-                    wx.MessageBox(f"ミュート解除処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                    wx.MessageBox(self.i18n.get_message("dialog.unmute_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             
             dlg.Destroy()
         else:
             # ミュートの確認ダイアログ
             dlg = wx.MessageDialog(
                 self,
-                f"{display_name}をミュートしますか？\n\nミュートすると、相手のコンテンツがタイムラインに表示されなくなります。相手にはミュートされたことは通知されません。",
-                "ミュートの確認",
+                self.i18n.get_message("dialog.mute_confirm").format(name=display_name),
+                self.i18n.get_message("dialog.mute_confirm_title"),
                 wx.YES_NO | wx.ICON_QUESTION
             )
             
@@ -408,8 +412,8 @@ class ProfileDialog(BaseDialog):
                     self.client.mute(handle)
                     
                     # 成功メッセージ
-                    wx.MessageBox(f"{display_name}をミュートしました", 
-                                 "ミュート完了", wx.OK | wx.ICON_INFORMATION)
+                    wx.MessageBox(self.i18n.get_message("dialog.mute_success").format(name=display_name), 
+                                 self.i18n.get_message("dialog.mute_success_title"), wx.OK | wx.ICON_INFORMATION)
                     
                     # ミュート状態を更新
                     if hasattr(self.profile_data, 'viewer'):
@@ -423,7 +427,7 @@ class ProfileDialog(BaseDialog):
                     
                 except Exception as e:
                     logger.error(f"ミュート処理に失敗しました: {str(e)}")
-                    wx.MessageBox(f"ミュート処理に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+                    wx.MessageBox(self.i18n.get_message("dialog.mute_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             
             dlg.Destroy()
     

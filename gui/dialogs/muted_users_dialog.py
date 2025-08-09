@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import logging
 from gui.dialogs.user_list_dialog import UserListDialog
+from utils.i18n import get_i18n
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -23,10 +24,11 @@ class MutedUsersDialog(UserListDialog):
             parent: 親ウィンドウ
             client: Blueskyクライアント
         """
+        i18n = get_i18n()
         super(MutedUsersDialog, self).__init__(
             parent,
             client,
-            title="ミュートしたユーザー一覧",
+            title=i18n.get_message("dialog.muted_users_title"),
             size=(600, 500)
         )
 
@@ -47,9 +49,9 @@ class MutedUsersDialog(UserListDialog):
 
         try:
             # ローディング表示
-            self.load_more_btn.SetLabel("読み込み中...")
+            self.load_more_btn.SetLabel(self.i18n.get_message("button.loading"))
             self.load_more_btn.Enable(False)
-            self.update_status("読み込み中...", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("button.loading"), len(self.list_ctrl.users))
 
             # ミュートしたユーザー一覧を取得
             result = self.client.get_muted_users(limit=100, cursor=self.cursor)
@@ -86,23 +88,23 @@ class MutedUsersDialog(UserListDialog):
 
             # もっと読み込むボタンの状態を更新
             if self.cursor:
-                self.load_more_btn.SetLabel("もっと読み込む")
+                self.load_more_btn.SetLabel(self.i18n.get_message("button.load_more"))
                 self.load_more_btn.Enable(True)
             else:
-                self.load_more_btn.SetLabel("これ以上ありません")
+                self.load_more_btn.SetLabel(self.i18n.get_message("button.no_more"))
                 self.load_more_btn.Enable(False)
 
             # ステータスを更新
-            self.update_status("ミュートしたユーザー", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("dialog.muted_users_status"), len(self.list_ctrl.users))
 
             logger.info(f"ミュートしたユーザー一覧を取得しました: {len(result.mutes)}件")
 
         except Exception as e:
             logger.error(f"ミュートしたユーザー一覧の取得に失敗しました: {str(e)}")
-            wx.MessageBox(f"ミュートしたユーザー一覧の取得に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-            self.load_more_btn.SetLabel("もっと読み込む")
+            wx.MessageBox(self.i18n.get_message("dialog.muted_users_fetch_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
+            self.load_more_btn.SetLabel(self.i18n.get_message("button.load_more"))
             self.load_more_btn.Enable(True)
-            self.update_status("読み込みエラー", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("dialog.load_error"), len(self.list_ctrl.users))
 
         finally:
             self.is_loading = False
@@ -135,11 +137,11 @@ class MutedUsersDialog(UserListDialog):
 
         # ミュート状態に応じてボタンラベルを設定
         if user.get('is_muted', False):
-            self.mute_btn.SetLabel("ミュート解除")
+            self.mute_btn.SetLabel(self.i18n.get_message("dialog.unmute_button"))
             self.mute_btn.Enable(True)
         else:
             # ミュート一覧ダイアログでミュートされていないユーザーは表示されないはずだが念のため
-            self.mute_btn.SetLabel("ミュート")
+            self.mute_btn.SetLabel(self.i18n.get_message("dialog.mute_button"))
             self.mute_btn.Enable(False)
 
     def on_unmute_button(self, event):
@@ -152,7 +154,7 @@ class MutedUsersDialog(UserListDialog):
         user_handle = user_data.get('handle')
 
         if not user_handle:
-            wx.MessageBox("ユーザーハンドルが取得できませんでした。", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("error.user_handle_fetch_failed"), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
             return
 
         try:
@@ -160,15 +162,15 @@ class MutedUsersDialog(UserListDialog):
             success = self.client.unmute(user_handle)
 
             if success:
-                wx.MessageBox(f"@{user_handle} のミュートを解除しました。", "成功", wx.OK | wx.ICON_INFORMATION)
+                wx.MessageBox(self.i18n.get_message("dialog.unmute_success").format(name=user_handle), self.i18n.get_message("dialog.unmute_success_title"), wx.OK | wx.ICON_INFORMATION)
                 # リストからユーザーを削除し、表示を更新
                 self.list_ctrl.DeleteItem(selected_index)
                 del self.list_ctrl.users[selected_index]
                 self.list_ctrl.RefreshItems(selected_index, self.list_ctrl.GetItemCount() - 1)
-                self.update_status("ミュートしたユーザー", len(self.list_ctrl.users))
+                self.update_status(self.i18n.get_message("dialog.muted_users_status"), len(self.list_ctrl.users))
             else:
-                wx.MessageBox(f"@{user_handle} のミュート解除に失敗しました。", "エラー", wx.OK | wx.ICON_ERROR)
+                wx.MessageBox(self.i18n.get_message("dialog.unmute_error").format(name=user_handle), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
 
         except Exception as e:
             logger.error(f"ミュート解除中にエラーが発生しました: {str(e)}")
-            wx.MessageBox(f"ミュート解除中にエラーが発生しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
+            wx.MessageBox(self.i18n.get_message("dialog.unmute_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)

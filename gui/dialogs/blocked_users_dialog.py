@@ -9,6 +9,7 @@ SSky - Blueskyクライアント
 import wx
 import logging
 from gui.dialogs.user_list_dialog import UserListDialog
+from utils.i18n import get_i18n
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
@@ -23,10 +24,11 @@ class BlockedUsersDialog(UserListDialog):
             parent: 親ウィンドウ
             client: Blueskyクライアント
         """
+        i18n = get_i18n()
         super(BlockedUsersDialog, self).__init__(
             parent, 
             client,
-            title="ブロックしたユーザー一覧",
+            title=i18n.get_message("dialog.blocked_users_title"),
             size=(600, 500)
         )
         
@@ -44,9 +46,9 @@ class BlockedUsersDialog(UserListDialog):
         
         try:
             # ローディング表示
-            self.load_more_btn.SetLabel("読み込み中...")
+            self.load_more_btn.SetLabel(self.i18n.get_message("button.loading"))
             self.load_more_btn.Enable(False)
-            self.update_status("読み込み中...", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("button.loading"), len(self.list_ctrl.users))
             
             # ブロックしたユーザー一覧を取得
             result = self.client.get_blocked_users(limit=100, cursor=self.cursor)
@@ -83,23 +85,23 @@ class BlockedUsersDialog(UserListDialog):
                 
             # もっと読み込むボタンの状態を更新
             if self.cursor:
-                self.load_more_btn.SetLabel("もっと読み込む")
+                self.load_more_btn.SetLabel(self.i18n.get_message("button.load_more"))
                 self.load_more_btn.Enable(True)
             else:
-                self.load_more_btn.SetLabel("これ以上ありません")
+                self.load_more_btn.SetLabel(self.i18n.get_message("button.no_more"))
                 self.load_more_btn.Enable(False)
                 
             # ステータスを更新
-            self.update_status("ブロックしたユーザー", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("dialog.blocked_users_status"), len(self.list_ctrl.users))
                 
             logger.info(f"ブロックしたユーザー一覧を取得しました: {len(result.blocks)}件")
             
         except Exception as e:
             logger.error(f"ブロックしたユーザー一覧の取得に失敗しました: {str(e)}")
-            wx.MessageBox(f"ブロックしたユーザー一覧の取得に失敗しました: {str(e)}", "エラー", wx.OK | wx.ICON_ERROR)
-            self.load_more_btn.SetLabel("もっと読み込む")
+            wx.MessageBox(self.i18n.get_message("dialog.blocked_users_fetch_error").format(error=str(e)), self.i18n.get_message("error.title"), wx.OK | wx.ICON_ERROR)
+            self.load_more_btn.SetLabel(self.i18n.get_message("button.load_more"))
             self.load_more_btn.Enable(True)
-            self.update_status("読み込みエラー", len(self.list_ctrl.users))
+            self.update_status(self.i18n.get_message("dialog.load_error"), len(self.list_ctrl.users))
         
         finally:
             self.is_loading = False
@@ -132,9 +134,9 @@ class BlockedUsersDialog(UserListDialog):
 
         # ブロック状態に応じてボタンラベルを設定
         if user.get('is_blocked', False):
-            self.block_btn.SetLabel("ブロック解除")
+            self.block_btn.SetLabel(self.i18n.get_message("dialog.unblock_button"))
             self.block_btn.Enable(True)
         else:
             # ブロック一覧ダイアログでブロックされていないユーザーは表示されないはずだが念のため
-            self.block_btn.SetLabel("ブロック")
+            self.block_btn.SetLabel(self.i18n.get_message("dialog.block_button"))
             self.block_btn.Enable(False)

@@ -23,11 +23,15 @@ class ReplyDialog(BasePostDialog):
             parent: 親ウィンドウ
             post_data (dict): 返信先の投稿データ
         """
+        # 一時的にデフォルトタイトルでBaseDialogを初期化
         super(ReplyDialog, self).__init__(
             parent, 
-            title=f"{post_data['username']}への返信", 
+            title=f"Reply to {post_data['username']}", 
             size=(500, 300)
         )
+        
+        # i18nが初期化された後でタイトルを更新
+        self.SetTitle(self.i18n.get_message("dialog.reply_to_user", username=post_data['username']))
         
         self.post_data = post_data
         
@@ -41,7 +45,7 @@ class ReplyDialog(BasePostDialog):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
         
         # 返信元の投稿情報
-        reply_from_label = wx.StaticText(panel, label="返信元:")
+        reply_from_label = wx.StaticText(panel, label=self.i18n.get_message("dialog.reply_to"))
         main_sizer.Add(reply_from_label, 0, wx.ALL | wx.EXPAND, 5)
         
         # 返信元の投稿内容（リードオンリー）
@@ -58,7 +62,7 @@ class ReplyDialog(BasePostDialog):
         main_sizer.Add(line, 0, wx.EXPAND | wx.ALL, 5)
         
         # 返信内容入力エリア
-        text_sizer = self.create_text_input_area(panel, "返信内容:")
+        text_sizer = self.create_text_input_area(panel, self.i18n.get_message("dialog.reply_content_label"))
         main_sizer.Add(text_sizer, 1, wx.EXPAND)
         
         # デフォルトでメンションを入れる
@@ -67,7 +71,7 @@ class ReplyDialog(BasePostDialog):
         self.set_insertion_point_end()
         
         # ボタン
-        button_sizer = self.create_button_area(panel, "返信")
+        button_sizer = self.create_button_area(panel, self.i18n.get_message("dialog.reply_button"))
         main_sizer.Add(button_sizer, 0, wx.ALL | wx.CENTER, 10)
         
         panel.SetSizer(main_sizer)
@@ -92,4 +96,4 @@ class ReplyDialog(BasePostDialog):
     
     def show_validation_error(self):
         """検証エラーメッセージの表示（オーバーライド）"""
-        self.show_error("返信内容を入力してください")
+        self.show_error(self.i18n.get_message("error.reply_content_required"))

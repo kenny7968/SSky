@@ -36,6 +36,9 @@ AUTH_SESSION_DELETED = "auth.session.deleted"    # セッションが削除さ�
 # UI_UPDATE_STATUS = "ui.update.status"          # ステータスバー更新 (引数: message)
 # UI_UPDATE_TIMELINE = "ui.update.timeline"      # タイムライン更新要求
 
+# 言語・国際化関連イベント
+LANGUAGE_CHANGED = "language.changed"          # 言語変更 (引数: new_locale)
+
 # 投稿関連イベント
 POST_SUBMIT_START = "post.submit.start"       # 投稿処理開始 (引数: なし)
 POST_SUBMIT_SUCCESS = "post.submit.success"    # 投稿成功 (引数: result)
