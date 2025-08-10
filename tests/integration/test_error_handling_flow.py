@@ -20,52 +20,6 @@ from tests.factories import UserFactory, PostFactory
 class TestErrorHandlingFlowIntegration:
     """エラー処理フロー統合テストクラス"""
     
-    @pytest.fixture
-    def integrated_error_handling_components(self, temp_db_file, mock_crypto, mock_atproto_client, mock_wx):
-        """統合されたエラー処理関連コンポーネント"""
-        components = {}
-        
-        # DataStore のモック設定
-        with patch('core.data_store.sqlite3') as mock_sqlite:
-            mock_connection = Mock()
-            mock_cursor = Mock()
-            mock_sqlite.connect.return_value = mock_connection
-            mock_connection.cursor.return_value = mock_cursor
-            mock_connection.execute = mock_cursor.execute
-            mock_connection.fetchone = mock_cursor.fetchone
-            mock_connection.commit = Mock()
-            mock_connection.close = Mock()
-            
-            from core.data_store import DataStore
-            components['data_store'] = DataStore(temp_db_file)
-        
-        # CredentialManager の設定  
-        with patch('core.auth.credential_manager.DataStore') as mock_ds_class, \
-             patch('utils.crypto.encrypt_data', mock_crypto['encrypt']), \
-             patch('utils.crypto.decrypt_data', mock_crypto['decrypt']):
-            
-            mock_ds_class.return_value = components['data_store']
-            
-            from core.auth.credential_manager import AuthCredentialManager
-            components['credential_manager'] = AuthCredentialManager()
-        
-        # BlueskyClient の設定
-        with patch('core.client.api_client.AtprotoClient') as mock_atproto:
-            mock_atproto.return_value = mock_atproto_client
-            
-            from core.client.facade import BlueskyClient
-            components['bluesky_client'] = BlueskyClient()
-            components['mock_atproto'] = mock_atproto_client
-        
-        # UnifiedErrorHandler の設定
-        from core.error_handler import UnifiedErrorHandler
-        components['error_handler'] = components['bluesky_client'].error_handler
-        
-        # wxPythonのモック
-        components['mock_wx'] = mock_wx
-        
-        return components
-    
     def test_authentication_error_flow(self, integrated_error_handling_components):
         """認証エラー処理フローのテスト"""
         components = integrated_error_handling_components

@@ -40,8 +40,17 @@ def require_authentication(error_message: str = "この操作にはログイン�
     def decorator(func):
         @functools.wraps(func)
         def wrapper(self, *args, **kwargs):
-            # クライアントが存在し、ログイン状態かチェック
-            if not hasattr(self, 'client') or not self.client or not self.client.is_logged_in:
+            try:
+                # クライアントが存在し、ログイン状態かチェック
+                if not hasattr(self, 'client') or not self.client or not self.client.is_logged_in:
+                    logger.warning(f"認証が必要な操作が未ログイン状態で実行されました: {func.__name__}")
+                    
+                    # エラーメッセージをユーザーに表示
+                    wx.MessageBox(error_message, "エラー", wx.OK | wx.ICON_ERROR)
+                    
+                    return return_value
+            except AttributeError:
+                # is_logged_in属性がない場合もログインしていないものとして扱う
                 logger.warning(f"認証が必要な操作が未ログイン状態で実行されました: {func.__name__}")
                 
                 # エラーメッセージをユーザーに表示

@@ -20,44 +20,6 @@ from tests.factories import UserFactory, PostFactory
 class TestPostFlowIntegration:
     """投稿フロー統合テストクラス"""
     
-    @pytest.fixture
-    def integrated_post_components(self, temp_db_file, mock_crypto, mock_atproto_client):
-        """統合された投稿関連コンポーネント"""
-        components = {}
-        
-        # DataStore のモック設定
-        with patch('core.data_store.sqlite3') as mock_sqlite:
-            mock_connection = Mock()
-            mock_cursor = Mock()
-            mock_sqlite.connect.return_value = mock_connection
-            mock_connection.cursor.return_value = mock_cursor
-            mock_connection.execute = mock_cursor.execute
-            mock_connection.fetchone = mock_cursor.fetchone
-            mock_connection.commit = Mock()
-            mock_connection.close = Mock()
-            
-            from core.data_store import DataStore
-            components['data_store'] = DataStore(temp_db_file)
-        
-        # CredentialManager の設定  
-        with patch('core.auth.credential_manager.DataStore') as mock_ds_class, \
-             patch('utils.crypto.encrypt_data', mock_crypto['encrypt']), \
-             patch('utils.crypto.decrypt_data', mock_crypto['decrypt']):
-            
-            mock_ds_class.return_value = components['data_store']
-            
-            from core.auth.credential_manager import AuthCredentialManager
-            components['credential_manager'] = AuthCredentialManager()
-        
-        # BlueskyClient の設定
-        with patch('core.client.api_client.AtprotoClient') as mock_atproto:
-            mock_atproto.return_value = mock_atproto_client
-            
-            from core.client.facade import BlueskyClient
-            components['bluesky_client'] = BlueskyClient()
-            components['mock_atproto'] = mock_atproto_client
-        
-        return components
     
     def test_complete_text_post_flow(self, integrated_post_components):
         """完全なテキスト投稿フローのテスト"""
@@ -80,7 +42,7 @@ class TestPostFlowIntegration:
         # 結果検証
         assert result is not None
         assert result == mock_post_result
-        mock_atproto.send_post.assert_called_once_with(post_text, None)
+        mock_atproto.send_post.assert_called_once_with(text=post_text)
     
     def test_complete_image_post_flow(self, integrated_post_components):
         """完全な画像投稿フローのテスト"""

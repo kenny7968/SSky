@@ -18,40 +18,6 @@ from typing import Dict, Any
 class TestSettingsFlowIntegration:
     """設定変更フロー統合テストクラス"""
     
-    @pytest.fixture
-    def integrated_settings_components(self, temp_config_file):
-        """統合された設定関連コンポーネント"""
-        components = {}
-        
-        # 初期設定ファイルを作成
-        initial_settings = {
-            "timeline_refresh_interval": 30,
-            "max_posts_display": 100,
-            "enable_notifications": True,
-            "theme": "default",
-            "language": "ja",
-            "auto_fetch_enabled": False,
-            "fetch_count": 50
-        }
-        
-        with open(temp_config_file, 'w', encoding='utf-8') as f:
-            json.dump(initial_settings, f, ensure_ascii=False, indent=2)
-        
-        components['config_file'] = temp_config_file
-        components['initial_settings'] = initial_settings
-        
-        # SettingsManager をモックまたは実際のインスタンスで設定
-        with patch('config.settings_manager.SettingsManager._get_settings_file_path') as mock_path:
-            mock_path.return_value = temp_config_file
-            
-            # シングルトンをリセット
-            from config.settings_manager import SettingsManager
-            if hasattr(SettingsManager, '_instance'):
-                SettingsManager._instance = None
-            
-            components['settings_manager'] = SettingsManager()
-        
-        return components
     
     def test_complete_settings_update_flow(self, integrated_settings_components):
         """完全な設定更新フローのテスト"""
