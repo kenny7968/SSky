@@ -39,13 +39,13 @@ jobs:
         fail_ci_if_error: false
 
     - name: Upload HTML coverage report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-html-report
         path: htmlcov/
 
     - name: Upload JSON coverage report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-json-report
         path: coverage.json
@@ -118,7 +118,7 @@ jobs:
         "
 
     - name: Upload coverage badge info
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: coverage-badge
         path: coverage_badge.txt
