@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 # URLを検出する正規表現パターン
 # https://から始まるURLと、www.から始まるURLの両方を検出
-URL_PATTERN = r'(?:https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w%!./?=&#+]*)*)|(?:www\.(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w%!./?=&#+]*)*)'
+# ポート番号(:8080など)にも対応
+URL_PATTERN = r'(?:https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?::\d+)?(?:/[-\w%!./?=&#+]*)?)|(?:www\.(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w%!./?=&#+]*)?)'
 
 def extract_urls(text: str) -> List[str]:
     """テキストからURLを抽出する
@@ -79,10 +80,15 @@ def extract_urls_from_facets(facets: List[Any]) -> List[str]:
                 
             for feature in facet.features:
                 # Linkタイプのfeatureからuriを取得
-                if hasattr(feature, '$type'):
-                    type_value = getattr(feature, '$type')
-                    if type_value == 'app.bsky.richtext.facet#link' and hasattr(feature, 'uri'):
-                        urls.append(feature.uri)
+                # $typeは特殊な属性名なので、__dict__やgetattrを使用
+                type_value = None
+                if hasattr(feature, '__dict__') and '$type' in feature.__dict__:
+                    type_value = feature.__dict__['$type']
+                elif hasattr(feature, '_get_type'):
+                    type_value = feature._get_type()
+                    
+                if type_value == 'app.bsky.richtext.facet#link' and hasattr(feature, 'uri'):
+                    urls.append(feature.uri)
                 # 新しいAPIでは型情報が異なる可能性があるため、代替チェック
                 elif hasattr(feature, 'uri'):
                     urls.append(feature.uri)

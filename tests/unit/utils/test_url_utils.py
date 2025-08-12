@@ -139,8 +139,8 @@ class TestExtractUrlsFromFacets:
         """リンクfeature付きfacetsのテスト"""
         # Bluesky API形式のfacet オブジェクトをモック
         mock_feature = Mock()
-        mock_feature.__dict__ = {'$type': 'app.bsky.richtext.facet#link', 'uri': 'https://example.com'}
-        setattr(mock_feature, '$type', 'app.bsky.richtext.facet#link')
+        # __dict__に$typeを設定
+        mock_feature.__dict__['$type'] = 'app.bsky.richtext.facet#link'
         mock_feature.uri = 'https://example.com'
         
         mock_facet = Mock()
@@ -172,12 +172,12 @@ class TestExtractUrlsFromFacets:
         """複数feature付きfacetsのテスト"""
         # 最初のfeature
         mock_feature1 = Mock()
-        setattr(mock_feature1, '$type', 'app.bsky.richtext.facet#link')
+        mock_feature1.__dict__['$type'] = 'app.bsky.richtext.facet#link'
         mock_feature1.uri = 'https://site1.com'
         
         # 2番目のfeature
         mock_feature2 = Mock()
-        setattr(mock_feature2, '$type', 'app.bsky.richtext.facet#link')
+        mock_feature2.__dict__['$type'] = 'app.bsky.richtext.facet#link'
         mock_feature2.uri = 'https://site2.com'
         
         mock_facet = Mock()
