@@ -24,9 +24,25 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-mock faker factory-boy
 
-    - name: Run tests with coverage
+    - name: Debug Python environment
       run: |
-        python -m pytest tests/unit tests/integration --cov=core --cov=utils --cov=config --cov-report=html --cov-report=xml --cov-report=term-missing --cov-report=json -v
+        echo "Python version:"
+        python --version
+        echo "Python path:"
+        python -c "import sys; print('\n'.join(sys.path))"
+        echo "Working directory:"
+        pwd
+        echo "Directory structure:"
+        ls -la
+        echo "Tests directory:"
+        ls -la tests/
+        echo "Test import check:"
+        python -c "import sys; sys.path.insert(0, '.'); from core.auth.credential_manager import AuthCredentialManager; print('Import successful')"
+
+    - name: Run tests with coverage
+      working-directory: ${{ github.workspace }}
+      run: |
+        python -m pytest tests/unit tests/integration --cov=core --cov=utils --cov=config --cov-report=html --cov-report=xml --cov-report=term-missing --cov-report=json -v --tb=short
       env:
         PYTEST_RUNNING: '1'
         PYTHONPATH: ${{ github.workspace }}
