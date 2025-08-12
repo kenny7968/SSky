@@ -225,11 +225,27 @@ class TestBlueskyApiContractSchemas:
             "cursor": "next_page_cursor"
         }
         
-        # スキーマ定義を調整
+        # スキーマ定義を調整（ネストされた定義をフラット化）
         adjusted_schema = timeline_response_schema.copy()
         adjusted_post_schema = post_schema.copy()
-        adjusted_post_schema["definitions"]["user_profile"] = user_profile_schema
-        adjusted_schema["definitions"]["post"] = adjusted_post_schema
+        
+        # ネストされた定義をトップレベルに移動
+        adjusted_schema["definitions"] = {
+            "post": adjusted_post_schema,
+            "user_profile": user_profile_schema,
+            "post_ref": {
+                "type": "object",
+                "required": ["uri", "cid"],
+                "properties": {
+                    "uri": {"type": "string"},
+                    "cid": {"type": "string"}
+                }
+            }
+        }
+        
+        # 投稿スキーマから重複したdefinitionsを削除
+        if "definitions" in adjusted_schema["definitions"]["post"]:
+            del adjusted_schema["definitions"]["post"]["definitions"]
         
         # スキーマ検証
         try:
