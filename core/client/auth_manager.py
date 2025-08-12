@@ -25,18 +25,26 @@ class BlueskyAuthManager:
     - ログイン状態の管理
     """
     
-    def __init__(self, api_client=None, session_manager=None):
+    def __init__(self, api_client=None, session_manager=None, credential_manager=None):
         """初期化
         
         Args:
             api_client (BlueskyApiClient, optional): APIクライアントインスタンス
             session_manager (BlueskySessionManager, optional): セッション管理インスタンス
+            credential_manager (AuthCredentialManager, optional): 認証情報管理インスタンス
         """
         self.api_client = api_client
         self.session_manager = session_manager
         self.profile = None
         self.is_logged_in = False
         self.user_did = None  # ログインユーザーのDIDを保持
+        
+        # 認証情報管理の初期化
+        if credential_manager is None:
+            from core.auth.credential_manager import AuthCredentialManager
+            self.credential_manager = AuthCredentialManager()
+        else:
+            self.credential_manager = credential_manager
         
     def login(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """Blueskyにログイン

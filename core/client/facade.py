@@ -84,6 +84,10 @@ class BlueskyClient:
         """プロパティをバインド"""
         # クライアントプロパティ
         self.client = self.api_client.client
+        
+        # 認証情報管理へのショートカット（統合テスト用）
+        if hasattr(self.auth_manager, 'credential_manager'):
+            self.credential_manager = self.auth_manager.credential_manager
 
     # Phase 3 追加: ファクトリメソッド
     @classmethod
