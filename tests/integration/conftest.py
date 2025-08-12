@@ -22,14 +22,16 @@ def integrated_auth_components(temp_db_file, mock_crypto):
     from core.data_store import DataStore
     components['data_store'] = DataStore(temp_db_file)
     
-    # CredentialManager の設定（暗号化のみモック）
-    with patch('utils.crypto.encrypt_data', mock_crypto['encrypt']), \
-         patch('utils.crypto.decrypt_data', mock_crypto['decrypt']):
-        
-        from core.auth.credential_manager import AuthCredentialManager
-        # シングルトンリセット
-        AuthCredentialManager._instance = None
-        components['credential_manager'] = AuthCredentialManager()
+    # CredentialManager の設定（暗号化関数を注入）
+    from core.auth.credential_manager import AuthCredentialManager
+    # シングルトンリセット
+    AuthCredentialManager._instance = None
+    # 暗号化関数を注入してCredentialManagerを作成
+    components['credential_manager'] = AuthCredentialManager(
+        data_store=components['data_store'],
+        encrypt_func=mock_crypto['encrypt'],
+        decrypt_func=mock_crypto['decrypt']
+    )
     
     # BlueskyClient のモック設定（APIクライアントのみモック）
     with patch('core.client.api_client.AtprotoClient') as mock_atproto:
@@ -62,14 +64,16 @@ def integrated_error_handling_components(temp_db_file, mock_crypto, mock_wx):
     from core.data_store import DataStore
     components['data_store'] = DataStore(temp_db_file)
     
-    # CredentialManager の設定（暗号化のみモック）
-    with patch('utils.crypto.encrypt_data', mock_crypto['encrypt']), \
-         patch('utils.crypto.decrypt_data', mock_crypto['decrypt']):
-        
-        from core.auth.credential_manager import AuthCredentialManager
-        # シングルトンリセット
-        AuthCredentialManager._instance = None
-        components['credential_manager'] = AuthCredentialManager()
+    # CredentialManager の設定（暗号化関数を注入）
+    from core.auth.credential_manager import AuthCredentialManager
+    # シングルトンリセット
+    AuthCredentialManager._instance = None
+    # 暗号化関数を注入してCredentialManagerを作成
+    components['credential_manager'] = AuthCredentialManager(
+        data_store=components['data_store'],
+        encrypt_func=mock_crypto['encrypt'],
+        decrypt_func=mock_crypto['decrypt']
+    )
     
     # BlueskyClient のモック設定（APIクライアントのみモック）
     with patch('core.client.api_client.AtprotoClient') as mock_atproto:
@@ -80,13 +84,9 @@ def integrated_error_handling_components(temp_db_file, mock_crypto, mock_wx):
         components['bluesky_client'] = BlueskyClient()
         components['mock_atproto'] = mock_client
     
-    # エラーハンドラーの設定（実際のもの、またはテスト用に必要に応じて）
-    try:
-        from core.error_handler import ErrorHandler
-        components['error_handler'] = ErrorHandler()
-    except ImportError:
-        # ErrorHandlerがない場合はスキップ
-        components['error_handler'] = None
+    # エラーハンドラーの設定
+    from core.error_handler import UnifiedErrorHandler
+    components['error_handler'] = UnifiedErrorHandler(components['bluesky_client'].auth_manager)
     
     yield components
     
@@ -107,13 +107,15 @@ def integrated_post_components(temp_db_file, mock_crypto):
     from core.data_store import DataStore
     components['data_store'] = DataStore(temp_db_file)
     
-    # CredentialManager の設定（暗号化のみモック）
-    with patch('utils.crypto.encrypt_data', mock_crypto['encrypt']), \
-         patch('utils.crypto.decrypt_data', mock_crypto['decrypt']):
-        
-        from core.auth.credential_manager import AuthCredentialManager
-        AuthCredentialManager._instance = None
-        components['credential_manager'] = AuthCredentialManager()
+    # CredentialManager の設定（暗号化関数を注入）
+    from core.auth.credential_manager import AuthCredentialManager
+    AuthCredentialManager._instance = None
+    # 暗号化関数を注入してCredentialManagerを作成
+    components['credential_manager'] = AuthCredentialManager(
+        data_store=components['data_store'],
+        encrypt_func=mock_crypto['encrypt'],
+        decrypt_func=mock_crypto['decrypt']
+    )
     
     # APIクライアントのモック設定
     with patch('core.client.api_client.AtprotoClient') as mock_atproto:
