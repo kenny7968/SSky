@@ -102,6 +102,11 @@ class TestMainFrameInitialization:
     @pytest.mark.gui
     def test_initialization_basic(self, mock_wx):
         """基本的な初期化"""
+        import sys
+        import os
+        # プロジェクトルートをパスに追加
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+        
         with patch('gui.main_frame.wx', mock_wx):
             from gui.main_frame import MainFrame
             

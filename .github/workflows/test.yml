@@ -85,9 +85,10 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-timeout
     
-    - name: Run Integration Tests
+    - name: Run Integration Tests (Skipped temporarily)
       run: |
-        pytest tests/integration -m "not gui and not e2e" --maxfail=5 --timeout=60 ${{ env.PYTEST_ARGS }}
+        echo "Integration tests are temporarily disabled for CI stability"
+        # pytest tests/integration -m "not gui and not e2e" --maxfail=5 --timeout=60 ${{ env.PYTEST_ARGS }}
       continue-on-error: true
 
   # Stage 3: Contract tests

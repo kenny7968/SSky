@@ -58,7 +58,9 @@ class BlueskyAuthManager:
             # ログイン試行
             self.profile = self.api_client.client.login(username, password)
             
-            logger.debug(f"ログイン成功: プロフィール={self.profile.display_name}, セッション={type(self.api_client.client._session)}")
+            # profileがオブジェクトか確認してから属性にアクセス
+            profile_name = getattr(self.profile, 'display_name', 'Unknown') if hasattr(self.profile, 'display_name') else str(self.profile)
+            logger.debug(f"ログイン成功: プロフィール={profile_name}, セッション={type(self.api_client.client._session) if hasattr(self.api_client.client, '_session') else 'N/A'}")
             
             # ユーザーDIDを保存
             self.user_did = self.api_client.client.me.did

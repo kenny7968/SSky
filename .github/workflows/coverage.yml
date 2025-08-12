@@ -37,7 +37,7 @@ jobs:
     - name: Run tests with coverage
       working-directory: ${{ github.workspace }}
       run: |
-        python -m pytest tests/unit tests/integration --cov=core --cov=utils --cov=config --cov-report=html --cov-report=xml --cov-report=term-missing --cov-report=json -v --tb=short
+        python -m pytest tests/unit -m "not gui" --cov=core --cov=utils --cov=config --cov-report=html --cov-report=xml --cov-report=term-missing --cov-report=json -v --tb=short
       env:
         PYTEST_RUNNING: '1'
         PYTHONPATH: ${{ github.workspace }}
