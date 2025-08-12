@@ -3,16 +3,19 @@
 
 """
 SSky - Blueskyクライアント
-pytest設定とグローバルフィクスチャ (Phase 2 リファクタリング版)
+pytest設定とグローバルフィクスチャ (完全リファクタリング版)
 """
 
 import pytest
 import tempfile
 import os
 import sys
+import shutil
+import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock, Mock
-from typing import Generator, Dict, Any
+from unittest.mock import patch, MagicMock, Mock, PropertyMock
+from typing import Generator, Dict, Any, Optional
+from datetime import datetime, timezone
 
 # プロジェクトルートをPythonパスに追加
 project_root = Path(__file__).parent.parent
@@ -20,6 +23,7 @@ sys.path.insert(0, str(project_root))
 
 # テスト実行時に必要な環境変数設定
 os.environ.setdefault('PYTEST_RUNNING', '1')
+os.environ.setdefault('SSKY_TEST_MODE', '1')
 
 
 @pytest.fixture(scope="session")
@@ -207,9 +211,17 @@ def isolated_data_store():
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """シングルトンインスタンスのリセット（自動適用）"""
+    # テスト開始前にもリセット
+    _reset_all_singletons()
+    
     yield
     
     # テスト終了後にシングルトンをリセット
+    _reset_all_singletons()
+
+
+def _reset_all_singletons():
+    """全てのシングルトンインスタンスをリセット"""
     # AuthCredentialManager のシングルトンリセット
     try:
         from core.auth.credential_manager import AuthCredentialManager
@@ -224,6 +236,14 @@ def reset_singletons():
         if hasattr(SettingsManager, '_instance'):
             SettingsManager._instance = None
     except ImportError:
+        pass
+    
+    # DataStore のシングルトンリセット（もしあれば）
+    try:
+        from core.data_store import DataStore
+        if hasattr(DataStore, '_instance'):
+            DataStore._instance = None
+    except (ImportError, AttributeError):
         pass
 
 
@@ -257,3 +277,54 @@ def event_loop():
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
+
+
+@pytest.fixture
+def mock_bluesky_client():
+    """BlueskyClientのモックフィクスチャ"""
+    from unittest.mock import Mock
+    client = Mock()
+    client.is_logged_in = Mock(return_value=True)
+    client.get_timeline = Mock(return_value=[])
+    client.send_post = Mock(return_value={"uri": "test://post/123"})
+    client.get_user_info = Mock(return_value={
+        "handle": "test.user",
+        "displayName": "Test User",
+        "did": "did:plc:test123"
+    })
+    return client
+
+
+@pytest.fixture
+def clean_test_environment(tmp_path):
+    """クリーンなテスト環境を提供"""
+    # テスト用の一時ディレクトリ構造を作成
+    test_dir = tmp_path / "ssky_test"
+    test_dir.mkdir()
+    
+    data_dir = test_dir / "data"
+    data_dir.mkdir()
+    
+    config_dir = test_dir / "config"
+    config_dir.mkdir()
+    
+    logs_dir = test_dir / "logs"
+    logs_dir.mkdir()
+    
+    return {
+        "root": test_dir,
+        "data": data_dir,
+        "config": config_dir,
+        "logs": logs_dir
+    }
+
+
+@pytest.fixture
+def mock_pubsub():
+    """PubSubのモックフィクスチャ"""
+    with patch('pubsub.pub.sendMessage') as mock_send:
+        with patch('pubsub.pub.subscribe') as mock_subscribe:
+            yield {
+                'sendMessage': mock_send,
+                'subscribe': mock_subscribe
+            }

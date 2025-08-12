@@ -11,6 +11,27 @@ python SSky.py
 
 ### Testing
 ```cmd
+# pytest使用（推奨）
+pytest
+
+# カバレッジ付き実行
+pytest --cov --cov-report=html
+
+# 特定のテストマーカーのみ実行
+pytest -m unit              # 単体テストのみ
+pytest -m integration       # 統合テストのみ
+pytest -m "not slow"        # slowマーカー以外
+
+# 並列実行（高速化）
+pytest -n auto
+
+# 前回失敗したテストのみ実行
+pytest --lf
+
+# 詳細出力
+pytest -v
+
+# 旧テストランナー（廃止予定）
 python tests\run_tests.py
 ```
 

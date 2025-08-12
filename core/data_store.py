@@ -220,7 +220,8 @@ class DataStore:
             logger.error(f"データベース操作でエラーが発生しました: {str(e)}")
             raise
         finally:
-            if conn:
+            # メモリ内データベースの場合は接続を閉じない
+            if conn and not hasattr(self, '_memory_conn'):
                 conn.close()
     
     @contextmanager
@@ -259,19 +260,28 @@ class DataStore:
         """
         import sqlite3
         
+        # 単一のメモリ内データベース接続を保持
+        # check_same_thread=Falseにより、複数スレッドからアクセス可能
+        memory_conn = sqlite3.connect(":memory:", check_same_thread=False)
+        
         # メモリ内データベース接続ファクトリ
         def memory_connection_factory():
-            return sqlite3.connect(":memory:")
+            return memory_conn
         
         # メモリ用のマイグレーション管理（パスは使用されない）
         if migration_manager is None:
             migration_manager = MigrationManager(":memory:")
         
-        return cls(
+        instance = cls(
             db_path=":memory:",
             connection_factory=memory_connection_factory,
             migration_manager=migration_manager
         )
+        
+        # 接続を保持（closeメソッドで閉じるため）
+        instance._memory_conn = memory_conn
+        
+        return instance
     
     @classmethod  
     def create_for_testing(cls, temp_path: str = None):
@@ -466,3 +476,21 @@ class DataStore:
         except Exception as e:
             logger.error(f"セッション情報の読み込みに失敗しました: {str(e)}")
             return None, None
+    
+    def close(self):
+        """データベース接続をクローズ
+        
+        注: このクラスではコンテキストマネージャーを使用しているため、
+        通常は明示的にcloseを呼ぶ必要はありません。
+        テスト時のクリーンアップ用に提供されています。
+        """
+        # メモリ内データベースの場合は接続を閉じる
+        if hasattr(self, '_memory_conn'):
+            try:
+                self._memory_conn.close()
+                logger.debug("メモリ内データベース接続を閉じました")
+            except Exception as e:
+                logger.debug(f"メモリ内データベース接続のクローズ時にエラー: {e}")
+        else:
+            # 通常のファイルベースのデータベースの場合
+            logger.debug("DataStore.close()が呼ばれました（no-op）")
