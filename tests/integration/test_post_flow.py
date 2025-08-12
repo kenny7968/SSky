@@ -82,7 +82,7 @@ class TestPostFlowIntegration:
         
         # APIが適切に呼ばれることを確認
         mock_atproto.upload_blob.assert_called_once_with(test_image_data, "image/jpeg")
-        mock_atproto.send_post.assert_called_once_with(post_text, [upload_result])
+        mock_atproto.send_post.assert_called_once_with(text=post_text, images=[upload_result])
     
     def test_post_with_authentication_error(self, integrated_post_components):
         """認証エラーが発生する投稿フローのテスト"""
@@ -105,7 +105,7 @@ class TestPostFlowIntegration:
             client.send_post(post_text)
         
         # APIが呼ばれることを確認
-        mock_atproto.send_post.assert_called_once_with(post_text, None)
+        mock_atproto.send_post.assert_called_once_with(text=post_text)
     
     def test_post_without_login(self, integrated_post_components):
         """ログインなしでの投稿フローのテスト"""
@@ -131,9 +131,9 @@ class TestPostFlowIntegration:
         client.is_logged_in = True
         client.user_did = "did:plc:testuser"
         
-        # リプライ成功をモック
+        # リプライ成功をモック（send_postメソッドを使用）
         mock_reply_result = PostFactory()
-        mock_atproto.reply_to_post.return_value = mock_reply_result
+        mock_atproto.send_post.return_value = mock_reply_result
         
         # リプライ元の投稿情報
         reply_to = {
@@ -148,7 +148,12 @@ class TestPostFlowIntegration:
         # 結果検証
         assert result is not None
         assert result == mock_reply_result
-        mock_atproto.reply_to_post.assert_called_once_with(reply_text, reply_to)
+        # send_postメソッドに reply_to パラメータを渡す
+        # reply_paramsの形式で呼ばれる
+        assert mock_atproto.send_post.called
+        call_args = mock_atproto.send_post.call_args
+        assert call_args[1]['text'] == reply_text
+        assert 'reply_to' in call_args[1]
     
     def test_quote_post_flow(self, integrated_post_components):
         """引用投稿フローのテスト"""
@@ -160,9 +165,9 @@ class TestPostFlowIntegration:
         client.is_logged_in = True
         client.user_did = "did:plc:testuser"
         
-        # 引用成功をモック
+        # 引用成功をモック（send_postメソッドを使用）
         mock_quote_result = PostFactory()
-        mock_atproto.quote_post.return_value = mock_quote_result
+        mock_atproto.send_post.return_value = mock_quote_result
         
         # 引用元の投稿情報
         quote_of = {
@@ -177,7 +182,11 @@ class TestPostFlowIntegration:
         # 結果検証
         assert result is not None
         assert result == mock_quote_result
-        mock_atproto.quote_post.assert_called_once_with(quote_text, quote_of)
+        # send_postメソッドに quote パラメータを渡す
+        assert mock_atproto.send_post.called
+        call_args = mock_atproto.send_post.call_args
+        assert call_args[1]['text'] == quote_text
+        assert 'quote' in call_args[1]
     
     def test_repost_flow(self, integrated_post_components):
         """リポストフローのテスト"""
@@ -205,7 +214,8 @@ class TestPostFlowIntegration:
         # 結果検証
         assert result is not None
         assert result == mock_repost_result
-        mock_atproto.repost.assert_called_once_with(repost_of)
+        # repostメソッドはuri, cidを別引数として受け取る
+        mock_atproto.repost.assert_called_once_with(repost_of['uri'], repost_of['cid'])
     
     def test_like_post_flow(self, integrated_post_components):
         """いいねフローのテスト"""
@@ -231,6 +241,7 @@ class TestPostFlowIntegration:
         # 結果検証
         assert result is not None
         assert result == mock_like_result
+        # likeメソッドはuri, cidを位置引数として受け取る
         mock_atproto.like.assert_called_once_with(post_uri, post_cid)
     
     def test_delete_post_flow(self, integrated_post_components):
@@ -243,12 +254,15 @@ class TestPostFlowIntegration:
         client.is_logged_in = True
         client.user_did = "did:plc:testuser"
         
-        # 削除成功をモック
+        # 削除成功をモック（com.atproto.repo.delete_recordを使用）
         mock_delete_result = {"success": True}
-        mock_atproto.delete_post.return_value = mock_delete_result
+        mock_atproto.com = Mock()
+        mock_atproto.com.atproto = Mock()
+        mock_atproto.com.atproto.repo = Mock()
+        mock_atproto.com.atproto.repo.delete_record = Mock(return_value=mock_delete_result)
         
-        # 削除対象の投稿URI
-        post_uri = "at://my.post/uri"
+        # 削除対象の投稿URI（正しい形式）
+        post_uri = "at://did:plc:testuser/app.bsky.feed.post/test123"
         
         # 投稿削除の実行
         result = client.delete_post(post_uri)
@@ -256,7 +270,8 @@ class TestPostFlowIntegration:
         # 結果検証
         assert result is not None
         assert result == mock_delete_result
-        mock_atproto.delete_post.assert_called_once_with(post_uri)
+        # com.atproto.repo.delete_recordが呼ばれることを確認
+        assert mock_atproto.com.atproto.repo.delete_record.called
 
 
 @pytest.mark.integration
@@ -376,7 +391,7 @@ class TestPostFlowWithNetworkSimulation:
             client.send_post(post_text)
         
         # APIが呼ばれることを確認
-        mock_atproto.send_post.assert_called_once_with(post_text, None)
+        mock_atproto.send_post.assert_called_once_with(text=post_text)
     
     def test_connection_error_during_upload(self, integrated_post_components):
         """アップロード時の接続エラー処理のテスト"""

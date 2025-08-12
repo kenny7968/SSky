@@ -3,764 +3,1045 @@
 
 """
 SSky - Blueskyクライアント
-BlueskyClientファサードクラス単体テスト (Phase 2 リファクタリング版)
+BlueskyClient ファサード包括テスト (Phase 2 カバレッジ強化)
+
+目標: 31.0% → 90%+ カバレッジ
 """
 
 import pytest
+import logging
 from unittest.mock import Mock, MagicMock, patch, call
-from typing import Optional, Dict, Any, List, Callable
-
-from core.client.facade import BlueskyClient
-from core.client.api_client import BlueskyApiClient
-from core.client.auth_manager import BlueskyAuthManager
-from core.client.session_manager import BlueskySessionManager
-from core.client.user_manager import BlueskyUserManager
-from core.error_handler import UnifiedErrorHandler
-from core.exceptions import AuthenticationError
+from typing import Dict, Any, List, Optional
 from atproto.exceptions import AtProtocolError
+from core.exceptions import AuthenticationError
 
 
-@pytest.mark.unit
-class TestBlueskyClientInstantiation:
-    """BlueskyClientインスタンス化テスト"""
+class TestBlueskyClientInitialization:
+    """BlueskyClient 初期化テスト"""
     
-    def test_default_instantiation(self):
-        """デフォルトインスタンス化テスト"""
-        with patch.multiple(
-            'core.client.facade',
-            BlueskyApiClient=Mock(),
-            BlueskySessionManager=Mock(),
-            BlueskyAuthManager=Mock(),
-            UnifiedErrorHandler=Mock(),
-            BlueskyUserManager=Mock()
-        ):
+    @pytest.mark.unit
+    def test_default_initialization(self):
+        """デフォルト初期化テスト"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager') as mock_session_manager_class, \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler') as mock_error_handler_class, \
+             patch('core.client.facade.BlueskyUserManager') as mock_user_manager_class:
+            
+            # モックインスタンスの設定
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            mock_session_manager = Mock()
+            mock_session_manager_class.return_value = mock_session_manager
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            mock_error_handler = Mock()
+            mock_error_handler_class.return_value = mock_error_handler
+            
+            mock_user_manager = Mock()
+            mock_user_manager_class.return_value = mock_user_manager
+            
+            # BlueskyClient初期化
             client = BlueskyClient()
             
-            assert client is not None
-            assert client.api_client is not None
-            assert client.session_manager is not None
-            assert client.auth_manager is not None
-            assert client.error_handler is not None
-            assert client.user_manager is not None
+            # 各コンポーネントが作成されたことを確認
+            mock_api_client_class.assert_called_once()
+            mock_session_manager_class.assert_called_once_with(mock_api_client)
+            mock_auth_manager_class.assert_called_once_with(mock_api_client, mock_session_manager)
+            mock_error_handler_class.assert_called_once_with(mock_auth_manager)
+            mock_user_manager_class.assert_called_once_with(mock_api_client, mock_auth_manager)
+            
+            # セッションマネージャーへのクライアント登録確認
+            mock_session_manager.register_client.assert_called_once_with(mock_api_client)
+            
+            # プロパティバインディング確認
+            assert client.api_client == mock_api_client
+            assert client.session_manager == mock_session_manager
+            assert client.auth_manager == mock_auth_manager
+            assert client.error_handler == mock_error_handler
+            assert client.user_manager == mock_user_manager
+            assert client.client == mock_api_client.client
     
-    def test_dependency_injection_instantiation(self):
-        """依存性注入によるインスタンス化テスト"""
-        # モックコンポーネントを作成
-        mock_api_client = Mock(spec=BlueskyApiClient)
-        mock_api_client.client = Mock()
-        mock_session_manager = Mock(spec=BlueskySessionManager)
-        mock_auth_manager = Mock(spec=BlueskyAuthManager)
-        mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        mock_user_manager = Mock(spec=BlueskyUserManager)
+    @pytest.mark.unit
+    def test_dependency_injection_initialization(self):
+        """依存性注入による初期化テスト"""
+        from core.client.facade import BlueskyClient
         
-        # 依存性注入でインスタンス作成
+        # カスタムコンポーネント
+        custom_api_client = Mock()
+        custom_session_manager = Mock()
+        custom_auth_manager = Mock()
+        custom_error_handler = Mock()
+        custom_user_manager = Mock()
+        
+        # 依存性注入で初期化
         client = BlueskyClient(
-            api_client=mock_api_client,
-            session_manager=mock_session_manager,
-            auth_manager=mock_auth_manager,
-            error_handler=mock_error_handler,
-            user_manager=mock_user_manager
+            api_client=custom_api_client,
+            session_manager=custom_session_manager,
+            auth_manager=custom_auth_manager,
+            error_handler=custom_error_handler,
+            user_manager=custom_user_manager
         )
         
         # 注入されたコンポーネントが使用されることを確認
-        assert client.api_client is mock_api_client
-        assert client.session_manager is mock_session_manager
-        assert client.auth_manager is mock_auth_manager
-        assert client.error_handler is mock_error_handler
-        assert client.user_manager is mock_user_manager
+        assert client.api_client == custom_api_client
+        assert client.session_manager == custom_session_manager
+        assert client.auth_manager == custom_auth_manager
+        assert client.error_handler == custom_error_handler
+        assert client.user_manager == custom_user_manager
+        
+        # セッションマネージャー登録確認
+        custom_session_manager.register_client.assert_called_once_with(custom_api_client)
     
+    @pytest.mark.unit
     def test_partial_dependency_injection(self):
         """部分的依存性注入テスト"""
-        mock_api_client = Mock(spec=BlueskyApiClient)
-        mock_api_client.client = Mock()
+        from core.client.facade import BlueskyClient
         
-        with patch.multiple(
-            'core.client.facade',
-            BlueskySessionManager=Mock(),
-            BlueskyAuthManager=Mock(),
-            UnifiedErrorHandler=Mock(),
-            BlueskyUserManager=Mock()
-        ):
-            client = BlueskyClient(api_client=mock_api_client)
+        with patch('core.client.facade.BlueskySessionManager') as mock_session_manager_class, \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler') as mock_error_handler_class, \
+             patch('core.client.facade.BlueskyUserManager') as mock_user_manager_class:
             
-            # 注入されたコンポーネントが使用される
-            assert client.api_client is mock_api_client
-            # 他のコンポーネントはデフォルトで作成される
-            assert client.session_manager is not None
-            assert client.auth_manager is not None
-            assert client.error_handler is not None
-            assert client.user_manager is not None
+            custom_api_client = Mock()
+            
+            # 部分的に依存性注入
+            client = BlueskyClient(api_client=custom_api_client)
+            
+            # 注入されたコンポーネント確認
+            assert client.api_client == custom_api_client
+            
+            # 他のコンポーネントはデフォルト作成されることを確認
+            mock_session_manager_class.assert_called_once_with(custom_api_client)
+            mock_auth_manager_class.assert_called_once()
+            mock_error_handler_class.assert_called_once()
+            mock_user_manager_class.assert_called_once()
 
 
-@pytest.mark.unit
 class TestBlueskyClientFactoryMethods:
-    """BlueskyClientファクトリメソッドテスト"""
+    """BlueskyClient ファクトリメソッドテスト"""
     
-    def test_create_for_testing_basic(self):
-        """基本的なテスト用インスタンス作成テスト"""
-        with patch.multiple(
-            'core.client.facade',
-            BlueskyApiClient=Mock(),
-            BlueskySessionManager=Mock(),
-            BlueskyAuthManager=Mock(),
-            UnifiedErrorHandler=Mock(),
-            BlueskyUserManager=Mock()
-        ):
+    @pytest.mark.unit
+    def test_create_for_testing_factory(self):
+        """テスト用ファクトリメソッド"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager') as mock_session_manager_class, \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler') as mock_error_handler_class, \
+             patch('core.client.facade.BlueskyUserManager') as mock_user_manager_class:
+            
+            # モックコンポーネント
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            # ファクトリメソッド実行
             client = BlueskyClient.create_for_testing()
             
+            # 適切にインスタンスが作成されることを確認
             assert isinstance(client, BlueskyClient)
-            assert client.api_client is not None
-            assert client.session_manager is not None
-            assert client.auth_manager is not None
-            assert client.error_handler is not None
-            assert client.user_manager is not None
+            mock_api_client_class.assert_called_once()
     
-    def test_create_for_testing_with_mock_api_client(self):
-        """モックAPIクライアントを使用したテスト用インスタンス作成テスト"""
-        mock_api_client = Mock(spec=BlueskyApiClient)
-        mock_api_client.client = Mock()
+    @pytest.mark.unit
+    def test_create_for_testing_with_mock_client(self):
+        """モックAPIクライアント付きテスト用ファクトリメソッド"""
+        from core.client.facade import BlueskyClient
         
-        with patch.multiple(
-            'core.client.facade',
-            BlueskySessionManager=Mock(),
-            BlueskyAuthManager=Mock(),
-            UnifiedErrorHandler=Mock(),
-            BlueskyUserManager=Mock()
-        ):
-            client = BlueskyClient.create_for_testing(mock_api_client=mock_api_client)
+        with patch('core.client.facade.BlueskySessionManager') as mock_session_manager_class, \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler') as mock_error_handler_class, \
+             patch('core.client.facade.BlueskyUserManager') as mock_user_manager_class:
             
-            assert isinstance(client, BlueskyClient)
-            assert client.api_client is mock_api_client
+            custom_mock_client = Mock()
+            
+            # モックAPIクライアント付きでファクトリメソッド実行
+            client = BlueskyClient.create_for_testing(mock_api_client=custom_mock_client)
+            
+            # カスタムAPIクライアントが使用されることを確認
+            assert client.api_client == custom_mock_client
+            mock_session_manager_class.assert_called_once_with(custom_mock_client)
     
-    def test_create_with_custom_credential_manager(self):
-        """カスタム認証情報管理を使用するインスタンス作成テスト"""
-        mock_credential_manager = Mock()
+    @pytest.mark.unit
+    def test_create_with_custom_credential_manager_factory(self):
+        """カスタム認証情報管理付きファクトリメソッド"""
+        from core.client.facade import BlueskyClient
         
-        with patch.multiple(
-            'core.client.facade',
-            BlueskyApiClient=Mock(),
-            BlueskySessionManager=Mock(),
-            BlueskyAuthManager=Mock(),
-            UnifiedErrorHandler=Mock(),
-            BlueskyUserManager=Mock()
-        ):
-            client = BlueskyClient.create_with_custom_credential_manager(mock_credential_manager)
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager') as mock_session_manager_class, \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler') as mock_error_handler_class, \
+             patch('core.client.facade.BlueskyUserManager') as mock_user_manager_class:
             
+            custom_credential_manager = Mock()
+            
+            # ファクトリメソッド実行
+            client = BlueskyClient.create_with_custom_credential_manager(custom_credential_manager)
+            
+            # 適切にインスタンスが作成されることを確認
             assert isinstance(client, BlueskyClient)
-            assert client.api_client is not None
-            assert client.session_manager is not None
-            assert client.auth_manager is not None
-            assert client.error_handler is not None
-            assert client.user_manager is not None
+            mock_api_client_class.assert_called_once()
 
 
-@pytest.mark.unit
 class TestBlueskyClientProperties:
-    """BlueskyClientプロパティテスト"""
+    """BlueskyClient プロパティテスト"""
     
-    def setup_method(self):
-        """各テストメソッド実行前の設定"""
-        self.mock_auth_manager = Mock()
-        self.mock_api_client = Mock(spec=BlueskyApiClient)
-        self.mock_api_client.client = Mock()
-        self.mock_session_manager = Mock(spec=BlueskySessionManager)
-        self.mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        self.mock_user_manager = Mock(spec=BlueskyUserManager)
+    @pytest.fixture
+    def mock_client(self):
+        """モック付きBlueskyClientインスタンス"""
+        from core.client.facade import BlueskyClient
         
-        self.client = BlueskyClient(
-            api_client=self.mock_api_client,
-            session_manager=self.mock_session_manager,
-            auth_manager=self.mock_auth_manager,
-            error_handler=self.mock_error_handler,
-            user_manager=self.mock_user_manager
-        )
+        with patch('core.client.facade.BlueskyApiClient'), \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            client = BlueskyClient()
+            return client, mock_auth_manager
     
-    def test_profile_property_getter(self):
-        """プロフィールプロパティゲッターテスト"""
-        test_profile = {"did": "did:test", "handle": "test.bsky.social"}
-        self.mock_auth_manager.profile = test_profile
+    @pytest.mark.unit
+    def test_profile_property_getter(self, mock_client):
+        """profileプロパティゲッターテスト"""
+        client, mock_auth_manager = mock_client
         
-        assert self.client.profile == test_profile
+        expected_profile = {"handle": "test.user", "displayName": "Test User"}
+        mock_auth_manager.profile = expected_profile
+        
+        assert client.profile == expected_profile
     
-    def test_profile_property_setter(self):
-        """プロフィールプロパティセッターテスト"""
-        test_profile = {"did": "did:test", "handle": "test.bsky.social"}
+    @pytest.mark.unit
+    def test_profile_property_setter(self, mock_client):
+        """profileプロパティセッターテスト"""
+        client, mock_auth_manager = mock_client
         
-        self.client.profile = test_profile
+        new_profile = {"handle": "new.user", "displayName": "New User"}
+        client.profile = new_profile
         
-        assert self.mock_auth_manager.profile == test_profile
+        assert mock_auth_manager.profile == new_profile
     
-    def test_is_logged_in_property_getter(self):
-        """ログイン状態プロパティゲッターテスト"""
-        self.mock_auth_manager.is_logged_in = True
+    @pytest.mark.unit
+    def test_is_logged_in_property_getter(self, mock_client):
+        """is_logged_inプロパティゲッターテスト"""
+        client, mock_auth_manager = mock_client
         
-        assert self.client.is_logged_in is True
+        mock_auth_manager.is_logged_in = True
+        assert client.is_logged_in == True
         
-        self.mock_auth_manager.is_logged_in = False
-        
-        assert self.client.is_logged_in is False
+        mock_auth_manager.is_logged_in = False
+        assert client.is_logged_in == False
     
-    def test_is_logged_in_property_setter(self):
-        """ログイン状態プロパティセッターテスト"""
-        self.client.is_logged_in = True
+    @pytest.mark.unit
+    def test_is_logged_in_property_setter(self, mock_client):
+        """is_logged_inプロパティセッターテスト"""
+        client, mock_auth_manager = mock_client
         
-        assert self.mock_auth_manager.is_logged_in is True
+        client.is_logged_in = True
+        assert mock_auth_manager.is_logged_in == True
         
-        self.client.is_logged_in = False
-        
-        assert self.mock_auth_manager.is_logged_in is False
+        client.is_logged_in = False
+        assert mock_auth_manager.is_logged_in == False
     
-    def test_user_did_property_getter(self):
-        """ユーザーDIDプロパティゲッターテスト"""
-        test_did = "did:plc:test123"
-        self.mock_auth_manager.user_did = test_did
+    @pytest.mark.unit
+    def test_user_did_property_getter(self, mock_client):
+        """user_didプロパティゲッターテスト"""
+        client, mock_auth_manager = mock_client
         
-        assert self.client.user_did == test_did
+        expected_did = "did:plc:test123"
+        mock_auth_manager.user_did = expected_did
+        
+        assert client.user_did == expected_did
     
-    def test_user_did_property_setter(self):
-        """ユーザーDIDプロパティセッターテスト"""
-        test_did = "did:plc:test123"
+    @pytest.mark.unit
+    def test_user_did_property_setter(self, mock_client):
+        """user_didプロパティセッターテスト"""
+        client, mock_auth_manager = mock_client
         
-        self.client.user_did = test_did
+        new_did = "did:plc:new123"
+        client.user_did = new_did
         
-        assert self.mock_auth_manager.user_did == test_did
+        assert mock_auth_manager.user_did == new_did
 
 
-@pytest.mark.unit 
-class TestBlueskyClientEventHandling:
-    """BlueskyClientイベントハンドリングテスト"""
+class TestBlueskyClientSessionEvents:
+    """BlueskyClient セッションイベントテスト"""
     
-    def setup_method(self):
-        """各テストメソッド実行前の設定"""
-        self.mock_session_manager = Mock(spec=BlueskySessionManager)
-        self.mock_api_client = Mock(spec=BlueskyApiClient)
-        self.mock_api_client.client = Mock()
-        self.mock_auth_manager = Mock()
-        self.mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        self.mock_user_manager = Mock(spec=BlueskyUserManager)
+    @pytest.fixture
+    def mock_client_with_session_manager(self):
+        """セッションマネージャー付きモッククライアント"""
+        from core.client.facade import BlueskyClient
         
-        self.client = BlueskyClient(
-            api_client=self.mock_api_client,
-            session_manager=self.mock_session_manager,
-            auth_manager=self.mock_auth_manager,
-            error_handler=self.mock_error_handler,
-            user_manager=self.mock_user_manager
-        )
+        with patch('core.client.facade.BlueskyApiClient'), \
+             patch('core.client.facade.BlueskySessionManager') as mock_session_manager_class, \
+             patch('core.client.facade.BlueskyAuthManager'), \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_session_manager = Mock()
+            mock_session_manager_class.return_value = mock_session_manager
+            
+            client = BlueskyClient()
+            return client, mock_session_manager
     
-    def test_on_session_change_registration(self):
+    @pytest.mark.unit
+    def test_on_session_change_registration(self, mock_client_with_session_manager):
         """セッション変更イベントハンドラ登録テスト"""
-        test_handler = Mock()
+        client, mock_session_manager = mock_client_with_session_manager
         
-        self.client.on_session_change(test_handler)
+        def test_handler(event, session):
+            pass
         
-        self.mock_session_manager.on_session_change.assert_called_once_with(test_handler)
+        client.on_session_change(test_handler)
+        
+        mock_session_manager.on_session_change.assert_called_once_with(test_handler)
     
-    def test_remove_session_change_handler(self):
+    @pytest.mark.unit
+    def test_remove_session_change_handler(self, mock_client_with_session_manager):
         """セッション変更イベントハンドラ削除テスト"""
-        test_handler = Mock()
-        self.mock_session_manager.remove_session_change_handler.return_value = True
+        client, mock_session_manager = mock_client_with_session_manager
         
-        result = self.client.remove_session_change_handler(test_handler)
+        def test_handler(event, session):
+            pass
         
-        self.mock_session_manager.remove_session_change_handler.assert_called_once_with(test_handler)
-        assert result is True
-    
-    def test_remove_session_change_handler_not_found(self):
-        """存在しないセッション変更イベントハンドラ削除テスト"""
-        test_handler = Mock()
-        self.mock_session_manager.remove_session_change_handler.return_value = False
+        mock_session_manager.remove_session_change_handler.return_value = True
         
-        result = self.client.remove_session_change_handler(test_handler)
+        result = client.remove_session_change_handler(test_handler)
         
-        self.mock_session_manager.remove_session_change_handler.assert_called_once_with(test_handler)
-        assert result is False
+        mock_session_manager.remove_session_change_handler.assert_called_once_with(test_handler)
+        assert result == True
 
 
-@pytest.mark.unit
-class TestBlueskyClientAuthenticationMethods:
-    """BlueskyClient認証メソッドテスト"""
+class TestBlueskyClientAuthentication:
+    """BlueskyClient 認証テスト"""
     
-    def setup_method(self):
-        """各テストメソッド実行前の設定"""
-        self.mock_auth_manager = Mock()
-        self.mock_api_client = Mock(spec=BlueskyApiClient)
-        self.mock_api_client.client = Mock()
-        self.mock_session_manager = Mock(spec=BlueskySessionManager)
-        self.mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        self.mock_user_manager = Mock(spec=BlueskyUserManager)
+    @pytest.fixture
+    def mock_client_with_auth(self):
+        """認証マネージャー付きモッククライアント"""
+        from core.client.facade import BlueskyClient
         
-        self.client = BlueskyClient(
-            api_client=self.mock_api_client,
-            session_manager=self.mock_session_manager,
-            auth_manager=self.mock_auth_manager,
-            error_handler=self.mock_error_handler,
-            user_manager=self.mock_user_manager
-        )
+        with patch('core.client.facade.BlueskyApiClient'), \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            client = BlueskyClient()
+            return client, mock_auth_manager
     
-    def test_login_success(self):
+    @pytest.mark.unit
+    def test_login_success(self, mock_client_with_auth):
         """ログイン成功テスト"""
-        test_profile = {"did": "did:test", "handle": "test.bsky.social"}
-        self.mock_auth_manager.login.return_value = test_profile
+        client, mock_auth_manager = mock_client_with_auth
         
-        result = self.client.login("test_user", "test_password")
+        expected_profile = {"handle": "test.user", "displayName": "Test User"}
+        mock_auth_manager.login.return_value = expected_profile
         
-        self.mock_auth_manager.login.assert_called_once_with("test_user", "test_password")
-        assert result == test_profile
+        result = client.login("test.user", "test_password")
+        
+        mock_auth_manager.login.assert_called_once_with("test.user", "test_password")
+        assert result == expected_profile
     
-    def test_login_with_session_success(self):
-        """セッション文字列を使用したログイン成功テスト"""
-        test_profile = {"did": "did:test", "handle": "test.bsky.social"}
-        test_session = "test_session_string"
-        self.mock_auth_manager.login_with_session.return_value = test_profile
+    @pytest.mark.unit
+    def test_login_with_session_success(self, mock_client_with_auth):
+        """セッション情報ログイン成功テスト"""
+        client, mock_auth_manager = mock_client_with_auth
         
-        result = self.client.login_with_session(test_session)
+        expected_profile = {"handle": "test.user", "displayName": "Test User"}
+        mock_auth_manager.login_with_session.return_value = expected_profile
         
-        self.mock_auth_manager.login_with_session.assert_called_once_with(test_session)
-        assert result == test_profile
+        session_string = "test_session_string"
+        result = client.login_with_session(session_string)
+        
+        mock_auth_manager.login_with_session.assert_called_once_with(session_string)
+        assert result == expected_profile
     
-    def test_logout_success(self):
+    @pytest.mark.unit
+    def test_logout_success(self, mock_client_with_auth):
         """ログアウト成功テスト"""
-        self.mock_auth_manager.logout.return_value = True
+        client, mock_auth_manager = mock_client_with_auth
         
-        result = self.client.logout()
+        mock_auth_manager.logout.return_value = True
         
-        self.mock_auth_manager.logout.assert_called_once()
-        assert result is True
+        result = client.logout()
+        
+        mock_auth_manager.logout.assert_called_once()
+        assert result == True
     
-    def test_export_session_string(self):
+    @pytest.mark.unit
+    def test_export_session_string(self, mock_client_with_auth):
         """セッション文字列エクスポートテスト"""
-        test_session_string = "exported_session_string"
-        self.mock_auth_manager.export_session_string.return_value = test_session_string
+        client, mock_auth_manager = mock_client_with_auth
         
-        result = self.client.export_session_string()
+        expected_session = "exported_session_string"
+        mock_auth_manager.export_session_string.return_value = expected_session
         
-        self.mock_auth_manager.export_session_string.assert_called_once()
-        assert result == test_session_string
+        result = client.export_session_string()
+        
+        mock_auth_manager.export_session_string.assert_called_once()
+        assert result == expected_session
     
-    def test_handle_api_error(self):
-        """APIエラー処理テスト"""
-        test_error = AtProtocolError("Test API error")
-        self.mock_auth_manager.handle_api_error.return_value = True
+    @pytest.mark.unit
+    def test_handle_api_error(self, mock_client_with_auth):
+        """API エラーハンドリングテスト"""
+        client, mock_auth_manager = mock_client_with_auth
         
-        result = self.client.handle_api_error(test_error, "テスト操作")
+        test_error = Exception("Test API error")
+        mock_auth_manager.handle_api_error.return_value = True
         
-        self.mock_auth_manager.handle_api_error.assert_called_once_with(test_error, "テスト操作")
-        assert result is True
+        result = client.handle_api_error(test_error, "テスト操作")
+        
+        mock_auth_manager.handle_api_error.assert_called_once_with(test_error, "テスト操作")
+        assert result == True
 
 
-@pytest.mark.unit
-class TestBlueskyClientTimelineMethods:
-    """BlueskyClientタイムラインメソッドテスト"""
+class TestBlueskyClientTimeline:
+    """BlueskyClient タイムラインテスト"""
     
-    def setup_method(self):
-        """各テストメソッド実行前の設定"""
-        self.mock_api_client = Mock(spec=BlueskyApiClient)
-        self.mock_api_client.client = Mock()
-        self.mock_auth_manager = Mock()
-        self.mock_session_manager = Mock(spec=BlueskySessionManager)
-        self.mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        self.mock_user_manager = Mock(spec=BlueskyUserManager)
+    @pytest.fixture
+    def mock_client_with_api(self):
+        """APIクライアント付きモッククライアント"""
+        from core.client.facade import BlueskyClient
         
-        self.client = BlueskyClient(
-            api_client=self.mock_api_client,
-            session_manager=self.mock_session_manager,
-            auth_manager=self.mock_auth_manager,
-            error_handler=self.mock_error_handler,
-            user_manager=self.mock_user_manager
-        )
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            client = BlueskyClient()
+            return client, mock_api_client, mock_auth_manager
     
-    def test_get_timeline_success(self):
-        """タイムライン取得成功テスト"""
-        test_timeline_data = {"feed": [{"uri": "test://post/1"}]}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.get_timeline.return_value = test_timeline_data
+    @pytest.mark.unit
+    def test_get_timeline_success_logged_in(self, mock_client_with_api):
+        """ログイン状態でのタイムライン取得成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_with_api
         
-        result = self.client.get_timeline(limit=25)
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
         
-        self.mock_api_client.get_timeline.assert_called_once_with(25)
-        assert result == test_timeline_data
+        expected_timeline = {"feed": [{"text": "Test post"}]}
+        mock_api_client.get_timeline.return_value = expected_timeline
+        
+        result = client.get_timeline(limit=10)
+        
+        mock_api_client.get_timeline.assert_called_once_with(10)
+        assert result == expected_timeline
     
-    def test_get_timeline_not_logged_in(self):
-        """未ログイン状態でのタイムライン取得テスト"""
-        self.mock_auth_manager.is_logged_in = False
+    @pytest.mark.unit
+    def test_get_timeline_not_logged_in(self, mock_client_with_api):
+        """未ログイン状態でのタイムライン取得エラーテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_with_api
+        
+        # 未ログイン状態設定
+        mock_auth_manager.is_logged_in = False
         
         with pytest.raises(Exception, match="タイムラインの取得にはログインが必要です"):
-            self.client.get_timeline()
+            client.get_timeline()
+        
+        # API呼び出しされないことを確認
+        mock_api_client.get_timeline.assert_not_called()
     
-    def test_get_timeline_api_error_auth_required(self):
-        """認証エラーが必要なAPIエラーテスト"""
-        self.mock_auth_manager.is_logged_in = True
-        test_error = AtProtocolError("Authentication failed")
-        self.mock_api_client.get_timeline.side_effect = test_error
-        self.mock_auth_manager.handle_api_error.return_value = True  # 再認証が必要
+    @pytest.mark.unit
+    def test_get_timeline_api_protocol_error(self, mock_client_with_api):
+        """タイムライン取得でのAtProtocolErrorテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_with_api
         
-        with pytest.raises(AuthenticationError, match="セッションが無効になりました"):
-            self.client.get_timeline()
-        
-        self.mock_auth_manager.handle_api_error.assert_called_once_with(test_error, "タイムライン取得")
-    
-    def test_get_timeline_api_error_no_auth_required(self):
-        """再認証不要なAPIエラーテスト"""
-        self.mock_auth_manager.is_logged_in = True
-        test_error = AtProtocolError("Network error")
-        self.mock_api_client.get_timeline.side_effect = test_error
-        self.mock_auth_manager.handle_api_error.return_value = False  # 再認証不要
-        
-        with pytest.raises(AtProtocolError, match="Network error"):
-            self.client.get_timeline()
-
-
-@pytest.mark.unit
-class TestBlueskyClientPostMethods:
-    """BlueskyClient投稿メソッドテスト"""
-    
-    def setup_method(self):
-        """各テストメソッド実行前の設定"""
-        self.mock_api_client = Mock(spec=BlueskyApiClient)
-        self.mock_api_client.client = Mock()
-        self.mock_auth_manager = Mock()
-        self.mock_session_manager = Mock(spec=BlueskySessionManager)
-        self.mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        self.mock_user_manager = Mock(spec=BlueskyUserManager)
-        
-        self.client = BlueskyClient(
-            api_client=self.mock_api_client,
-            session_manager=self.mock_session_manager,
-            auth_manager=self.mock_auth_manager,
-            error_handler=self.mock_error_handler,
-            user_manager=self.mock_user_manager
-        )
-    
-    def test_send_post_success(self):
-        """投稿送信成功テスト"""
-        test_result = {"uri": "test://post/123", "cid": "test_cid"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.send_post.return_value = test_result
-        
-        result = self.client.send_post("テスト投稿")
-        
-        self.mock_api_client.send_post.assert_called_once_with("テスト投稿", None)
-        assert result == test_result
-    
-    def test_send_post_with_images(self):
-        """画像付き投稿送信テスト"""
-        test_result = {"uri": "test://post/123", "cid": "test_cid"}
-        test_images = [{"blob": "image_blob_1"}]
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.send_post.return_value = test_result
-        
-        result = self.client.send_post("テスト投稿", images=test_images)
-        
-        self.mock_api_client.send_post.assert_called_once_with("テスト投稿", test_images)
-        assert result == test_result
-    
-    def test_send_post_not_logged_in(self):
-        """未ログイン状態での投稿送信テスト"""
-        self.mock_auth_manager.is_logged_in = False
-        
-        with pytest.raises(Exception, match="投稿にはログインが必要です"):
-            self.client.send_post("テスト投稿")
-    
-    def test_upload_blob_success(self):
-        """ブロブアップロード成功テスト"""
-        test_result = {"blob": {"ref": "test_blob_ref"}}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.upload_blob.return_value = test_result
-        
-        test_file_data = b"test_file_content"
-        result = self.client.upload_blob(test_file_data, "image/png")
-        
-        self.mock_api_client.upload_blob.assert_called_once_with(test_file_data, "image/png")
-        assert result == test_result
-    
-    def test_upload_blob_not_logged_in(self):
-        """未ログイン状態でのブロブアップロードテスト"""
-        self.mock_auth_manager.is_logged_in = False
-        
-        with pytest.raises(Exception, match="ファイルのアップロードにはログインが必要です"):
-            self.client.upload_blob(b"test_data")
-
-
-@pytest.mark.unit
-class TestBlueskyClientUserInteractionMethods:
-    """BlueskyClientユーザー操作メソッドテスト"""
-    
-    def setup_method(self):
-        """各テストメソッド実行前の設定"""
-        self.mock_api_client = Mock(spec=BlueskyApiClient)
-        self.mock_api_client.client = Mock()
-        self.mock_auth_manager = Mock()
-        self.mock_session_manager = Mock(spec=BlueskySessionManager)
-        self.mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        self.mock_user_manager = Mock(spec=BlueskyUserManager)
-        
-        self.client = BlueskyClient(
-            api_client=self.mock_api_client,
-            session_manager=self.mock_session_manager,
-            auth_manager=self.mock_auth_manager,
-            error_handler=self.mock_error_handler,
-            user_manager=self.mock_user_manager
-        )
-    
-    def test_follow_success(self):
-        """フォロー成功テスト"""
-        test_result = {"uri": "test://follow/123"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_error_handler.safe_api_call.return_value = test_result
-        
-        result = self.client.follow("test.bsky.social")
-        
-        self.mock_error_handler.safe_api_call.assert_called_once_with(
-            self.mock_user_manager.follow, "test.bsky.social", operation_name="フォロー"
-        )
-        assert result == test_result
-    
-    def test_follow_not_logged_in(self):
-        """未ログイン状態でのフォローテスト"""
-        self.mock_auth_manager.is_logged_in = False
-        
-        with pytest.raises(Exception, match="フォローにはログインが必要です"):
-            self.client.follow("test.bsky.social")
-    
-    def test_unfollow_success(self):
-        """フォロー解除成功テスト"""
-        test_result = {"success": True}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_error_handler.safe_api_call.return_value = test_result
-        
-        result = self.client.unfollow("test.bsky.social")
-        
-        self.mock_error_handler.safe_api_call.assert_called_once_with(
-            self.mock_user_manager.unfollow, "test.bsky.social", operation_name="フォロー解除"
-        )
-        assert result == test_result
-    
-    def test_block_success(self):
-        """ブロック成功テスト"""
-        test_result = {"uri": "test://block/123"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_error_handler.safe_api_call.return_value = test_result
-        
-        result = self.client.block("test.bsky.social")
-        
-        self.mock_error_handler.safe_api_call.assert_called_once_with(
-            self.mock_user_manager.block, "test.bsky.social", operation_name="ブロック"
-        )
-        assert result == test_result
-    
-    def test_mute_success(self):
-        """ミュート成功テスト"""
-        test_result = {"uri": "test://mute/123"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_error_handler.safe_api_call.return_value = test_result
-        
-        result = self.client.mute("test.bsky.social")
-        
-        self.mock_error_handler.safe_api_call.assert_called_once_with(
-            self.mock_user_manager.mute, "test.bsky.social", operation_name="ミュート"
-        )
-        assert result == test_result
-    
-    def test_get_following_success(self):
-        """フォロー中ユーザー取得成功テスト"""
-        test_result = {"follows": [{"handle": "user1.bsky.social"}]}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_error_handler.handle_with_auth_check.return_value = test_result
-        
-        result = self.client.get_following("test.bsky.social", limit=50)
-        
-        self.mock_error_handler.handle_with_auth_check.assert_called_once_with(
-            self.mock_user_manager.get_following, "test.bsky.social", 50, None,
-            operation_name="フォロー中ユーザー一覧取得"
-        )
-        assert result == test_result
-    
-    def test_get_blocked_users_success(self):
-        """ブロック済みユーザー取得成功テスト"""
-        test_result = {"blocks": [{"handle": "blocked_user.bsky.social"}]}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_error_handler.handle_with_auth_check.return_value = test_result
-        
-        result = self.client.get_blocked_users(limit=50)
-        
-        self.mock_error_handler.handle_with_auth_check.assert_called_once_with(
-            self.mock_user_manager.get_blocked_users, 50, None,
-            operation_name="ブロックしたユーザー一覧取得"
-        )
-        assert result == test_result
-
-
-@pytest.mark.unit
-class TestBlueskyClientPostInteractionMethods:
-    """BlueskyClient投稿操作メソッドテスト"""
-    
-    def setup_method(self):
-        """各テストメソッド実行前の設定"""
-        self.mock_api_client = Mock(spec=BlueskyApiClient)
-        self.mock_api_client.client = Mock()
-        self.mock_auth_manager = Mock()
-        self.mock_session_manager = Mock(spec=BlueskySessionManager)
-        self.mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        self.mock_user_manager = Mock(spec=BlueskyUserManager)
-        
-        self.client = BlueskyClient(
-            api_client=self.mock_api_client,
-            session_manager=self.mock_session_manager,
-            auth_manager=self.mock_auth_manager,
-            error_handler=self.mock_error_handler,
-            user_manager=self.mock_user_manager
-        )
-    
-    def test_like_success(self):
-        """いいね成功テスト"""
-        test_result = {"uri": "test://like/123"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.like.return_value = test_result
-        
-        result = self.client.like("test://post/123", "test_cid")
-        
-        self.mock_api_client.like.assert_called_once_with("test://post/123", "test_cid")
-        assert result == test_result
-    
-    def test_like_not_logged_in(self):
-        """未ログイン状態でのいいねテスト"""
-        self.mock_auth_manager.is_logged_in = False
-        
-        with pytest.raises(Exception, match="いいねにはログインが必要です"):
-            self.client.like("test://post/123", "test_cid")
-    
-    def test_delete_post_success(self):
-        """投稿削除成功テスト"""
-        test_result = {"success": True}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.delete_post.return_value = test_result
-        
-        result = self.client.delete_post("test://post/123")
-        
-        self.mock_api_client.delete_post.assert_called_once_with("test://post/123")
-        assert result == test_result
-    
-    def test_reply_to_post_success(self):
-        """返信成功テスト"""
-        test_result = {"uri": "test://reply/123"}
-        test_reply_to = {"uri": "test://post/original", "cid": "original_cid"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.reply_to_post.return_value = test_result
-        
-        result = self.client.reply_to_post("返信テスト", test_reply_to)
-        
-        self.mock_api_client.reply_to_post.assert_called_once_with("返信テスト", test_reply_to)
-        assert result == test_result
-    
-    def test_quote_post_success(self):
-        """引用投稿成功テスト"""
-        test_result = {"uri": "test://quote/123"}
-        test_quote_of = {"uri": "test://post/original", "cid": "original_cid"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.quote_post.return_value = test_result
-        
-        result = self.client.quote_post("引用テスト", test_quote_of)
-        
-        self.mock_api_client.quote_post.assert_called_once_with("引用テスト", test_quote_of)
-        assert result == test_result
-    
-    def test_repost_success(self):
-        """リポスト成功テスト"""
-        test_result = {"uri": "test://repost/123"}
-        test_repost_of = {"uri": "test://post/original", "cid": "original_cid"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.repost.return_value = test_result
-        
-        result = self.client.repost(test_repost_of)
-        
-        self.mock_api_client.repost.assert_called_once_with(test_repost_of)
-        assert result == test_result
-    
-    def test_get_profile_success(self):
-        """プロフィール取得成功テスト"""
-        test_result = {"handle": "test.bsky.social", "did": "did:plc:test"}
-        self.mock_auth_manager.is_logged_in = True
-        self.mock_api_client.get_profile.return_value = test_result
-        
-        result = self.client.get_profile("test.bsky.social")
-        
-        self.mock_api_client.get_profile.assert_called_once_with("test.bsky.social")
-        assert result == test_result
-
-
-@pytest.mark.unit
-class TestBlueskyClientPropertyBinding:
-    """BlueskyClientプロパティバインディングテスト"""
-    
-    def test_client_property_binding(self):
-        """clientプロパティバインディングテスト"""
-        mock_atproto_client = Mock()
-        mock_api_client = Mock(spec=BlueskyApiClient)
-        mock_api_client.client = mock_atproto_client
-        
-        with patch.multiple(
-            'core.client.facade',
-            BlueskySessionManager=Mock(),
-            BlueskyAuthManager=Mock(),
-            UnifiedErrorHandler=Mock(),
-            BlueskyUserManager=Mock()
-        ):
-            client = BlueskyClient(api_client=mock_api_client)
-            
-            # clientプロパティがapi_client.clientにバインドされることを確認
-            assert client.client is mock_atproto_client
-
-
-@pytest.mark.unit
-class TestBlueskyClientIntegration:
-    """BlueskyClient統合テスト"""
-    
-    def test_component_registration_flow(self):
-        """コンポーネント登録フローテスト"""
-        mock_api_client = Mock(spec=BlueskyApiClient)
-        mock_api_client.client = Mock()
-        mock_session_manager = Mock(spec=BlueskySessionManager)
-        
-        with patch.multiple(
-            'core.client.facade',
-            BlueskyAuthManager=Mock(),
-            UnifiedErrorHandler=Mock(),
-            BlueskyUserManager=Mock()
-        ):
-            client = BlueskyClient(
-                api_client=mock_api_client,
-                session_manager=mock_session_manager
-            )
-            
-            # セッションマネージャーにAPIクライアントが登録されることを確認
-            mock_session_manager.register_client.assert_called_once_with(mock_api_client)
-    
-    def test_error_propagation_integration(self):
-        """エラー伝播統合テスト"""
-        mock_api_client = Mock(spec=BlueskyApiClient)
-        mock_api_client.client = Mock()
-        mock_auth_manager = Mock()
-        mock_session_manager = Mock(spec=BlueskySessionManager)
-        mock_error_handler = Mock(spec=UnifiedErrorHandler)
-        mock_user_manager = Mock(spec=BlueskyUserManager)
-        
-        # APIエラーをシミュレート
-        test_error = AtProtocolError("Test error")
-        mock_api_client.get_timeline.side_effect = test_error
+        # ログイン状態設定
         mock_auth_manager.is_logged_in = True
-        mock_auth_manager.handle_api_error.return_value = False  # 再認証不要
+        mock_auth_manager.handle_api_error.return_value = True  # 認証エラーを示す
         
-        client = BlueskyClient(
-            api_client=mock_api_client,
-            session_manager=mock_session_manager,
-            auth_manager=mock_auth_manager,
-            error_handler=mock_error_handler,
-            user_manager=mock_user_manager
-        )
+        # AtProtocolErrorをシミュレート
+        api_error = AtProtocolError("Authentication failed")
+        mock_api_client.get_timeline.side_effect = api_error
         
-        # エラーが適切に伝播されることを確認
+        with pytest.raises(AuthenticationError):
+            client.get_timeline()
+        
+        # エラーハンドリングが呼ばれることを確認
+        mock_auth_manager.handle_api_error.assert_called_once_with(api_error, "タイムライン取得")
+    
+    @pytest.mark.unit
+    def test_get_timeline_api_protocol_error_non_auth(self, mock_client_with_api):
+        """非認証AtProtocolErrorの再スローテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_with_api
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        mock_auth_manager.handle_api_error.return_value = False  # 非認証エラーを示す
+        
+        # AtProtocolErrorをシミュレート
+        api_error = AtProtocolError("Rate limit exceeded")
+        mock_api_client.get_timeline.side_effect = api_error
+        
         with pytest.raises(AtProtocolError):
             client.get_timeline()
         
-        # エラーハンドラーが呼び出されることを確認
-        mock_auth_manager.handle_api_error.assert_called_once_with(test_error, "タイムライン取得")
+        mock_auth_manager.handle_api_error.assert_called_once_with(api_error, "タイムライン取得")
+    
+    @pytest.mark.unit
+    def test_get_timeline_generic_exception(self, mock_client_with_api):
+        """タイムライン取得での一般例外テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_with_api
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        # 一般例外をシミュレート
+        generic_error = ValueError("Unexpected error")
+        mock_api_client.get_timeline.side_effect = generic_error
+        
+        with pytest.raises(ValueError):
+            client.get_timeline()
+
+
+class TestBlueskyClientPostOperations:
+    """BlueskyClient 投稿操作テスト"""
+    
+    @pytest.fixture
+    def mock_client_for_posts(self):
+        """投稿操作用モッククライアント"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            client = BlueskyClient()
+            return client, mock_api_client, mock_auth_manager
+    
+    @pytest.mark.unit
+    def test_send_post_success(self, mock_client_for_posts):
+        """投稿送信成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_posts
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://test.user/app.bsky.feed.post/123"}
+        mock_api_client.send_post.return_value = expected_result
+        
+        result = client.send_post("Test post content")
+        
+        mock_api_client.send_post.assert_called_once_with("Test post content", None)
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_send_post_with_images(self, mock_client_for_posts):
+        """画像付き投稿送信テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_posts
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://test.user/app.bsky.feed.post/124"}
+        mock_api_client.send_post.return_value = expected_result
+        
+        test_images = ["image1.jpg", "image2.png"]
+        result = client.send_post("Post with images", images=test_images)
+        
+        mock_api_client.send_post.assert_called_once_with("Post with images", test_images)
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_send_post_not_logged_in(self, mock_client_for_posts):
+        """未ログイン状態での投稿送信エラーテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_posts
+        
+        # 未ログイン状態設定
+        mock_auth_manager.is_logged_in = False
+        
+        with pytest.raises(Exception, match="投稿にはログインが必要です"):
+            client.send_post("Test post")
+        
+        mock_api_client.send_post.assert_not_called()
+    
+    @pytest.mark.unit
+    def test_send_post_api_error(self, mock_client_for_posts):
+        """投稿送信でのAPIエラーテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_posts
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        # AtProtocolErrorをシミュレート
+        api_error = AtProtocolError("Post too long")
+        mock_api_client.send_post.side_effect = api_error
+        
+        with pytest.raises(AtProtocolError):
+            client.send_post("Test post")
+    
+    @pytest.mark.unit
+    def test_send_post_generic_error(self, mock_client_for_posts):
+        """投稿送信での一般エラーテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_posts
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        # 一般例外をシミュレート
+        generic_error = ConnectionError("Network error")
+        mock_api_client.send_post.side_effect = generic_error
+        
+        with pytest.raises(ConnectionError):
+            client.send_post("Test post")
+    
+    @pytest.mark.unit
+    def test_upload_blob_success(self, mock_client_for_posts):
+        """ファイルアップロード成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_posts
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"ref": "blob_ref_123", "mimeType": "image/jpeg"}
+        mock_api_client.upload_blob.return_value = expected_result
+        
+        test_data = b"test file data"
+        result = client.upload_blob(test_data, "image/jpeg")
+        
+        mock_api_client.upload_blob.assert_called_once_with(test_data, "image/jpeg")
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_upload_blob_not_logged_in(self, mock_client_for_posts):
+        """未ログイン状態でのファイルアップロードエラーテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_posts
+        
+        # 未ログイン状態設定
+        mock_auth_manager.is_logged_in = False
+        
+        with pytest.raises(Exception, match="ファイルのアップロードにはログインが必要です"):
+            client.upload_blob(b"test data")
+        
+        mock_api_client.upload_blob.assert_not_called()
+
+
+class TestBlueskyClientPostInteractions:
+    """BlueskyClient 投稿相互作用テスト"""
+    
+    @pytest.fixture
+    def mock_client_for_interactions(self):
+        """投稿相互作用用モッククライアント"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            client = BlueskyClient()
+            return client, mock_api_client, mock_auth_manager
+    
+    @pytest.mark.unit
+    def test_like_post_success(self, mock_client_for_interactions):
+        """投稿いいね成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_interactions
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://test.user/app.bsky.feed.like/123"}
+        mock_api_client.like.return_value = expected_result
+        
+        result = client.like("at://post/uri", "post_cid")
+        
+        mock_api_client.like.assert_called_once_with("at://post/uri", "post_cid")
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_like_post_not_logged_in(self, mock_client_for_interactions):
+        """未ログイン状態での投稿いいねエラーテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_interactions
+        
+        # 未ログイン状態設定
+        mock_auth_manager.is_logged_in = False
+        
+        with pytest.raises(Exception, match="いいねにはログインが必要です"):
+            client.like("at://post/uri", "post_cid")
+        
+        mock_api_client.like.assert_not_called()
+    
+    @pytest.mark.unit
+    def test_delete_post_success(self, mock_client_for_interactions):
+        """投稿削除成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_interactions
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"success": True}
+        mock_api_client.delete_post.return_value = expected_result
+        
+        result = client.delete_post("at://post/uri")
+        
+        mock_api_client.delete_post.assert_called_once_with("at://post/uri")
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_reply_to_post_success(self, mock_client_for_interactions):
+        """投稿返信成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_interactions
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://test.user/app.bsky.feed.post/reply123"}
+        mock_api_client.reply_to_post.return_value = expected_result
+        
+        reply_to_data = {"uri": "at://original/post", "cid": "original_cid"}
+        result = client.reply_to_post("Reply text", reply_to_data)
+        
+        mock_api_client.reply_to_post.assert_called_once_with("Reply text", reply_to_data)
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_quote_post_success(self, mock_client_for_interactions):
+        """投稿引用成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_interactions
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://test.user/app.bsky.feed.post/quote123"}
+        mock_api_client.quote_post.return_value = expected_result
+        
+        quote_of_data = {"uri": "at://quoted/post", "cid": "quoted_cid"}
+        result = client.quote_post("Quote comment", quote_of_data)
+        
+        mock_api_client.quote_post.assert_called_once_with("Quote comment", quote_of_data)
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_repost_success(self, mock_client_for_interactions):
+        """リポスト成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_interactions
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://test.user/app.bsky.feed.repost/123"}
+        mock_api_client.repost.return_value = expected_result
+        
+        repost_of_data = {"uri": "at://reposted/post", "cid": "reposted_cid"}
+        result = client.repost(repost_of_data)
+        
+        mock_api_client.repost.assert_called_once_with(repost_of_data)
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_get_profile_success(self, mock_client_for_interactions):
+        """プロフィール取得成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_interactions
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_profile = {"handle": "target.user", "displayName": "Target User"}
+        mock_api_client.get_profile.return_value = expected_profile
+        
+        result = client.get_profile("target.user")
+        
+        mock_api_client.get_profile.assert_called_once_with("target.user")
+        assert result == expected_profile
+
+
+class TestBlueskyClientUserManagement:
+    """BlueskyClient ユーザー管理テスト"""
+    
+    @pytest.fixture
+    def mock_client_for_user_management(self):
+        """ユーザー管理用モッククライアント"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient'), \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler') as mock_error_handler_class, \
+             patch('core.client.facade.BlueskyUserManager') as mock_user_manager_class:
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            mock_error_handler = Mock()
+            mock_error_handler_class.return_value = mock_error_handler
+            
+            mock_user_manager = Mock()
+            mock_user_manager_class.return_value = mock_user_manager
+            
+            client = BlueskyClient()
+            return client, mock_auth_manager, mock_error_handler, mock_user_manager
+    
+    @pytest.mark.unit
+    def test_follow_user_success(self, mock_client_for_user_management):
+        """ユーザーフォロー成功テスト"""
+        client, mock_auth_manager, mock_error_handler, mock_user_manager = mock_client_for_user_management
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://follow/123"}
+        mock_error_handler.safe_api_call.return_value = expected_result
+        
+        result = client.follow("target.user")
+        
+        mock_error_handler.safe_api_call.assert_called_once_with(
+            mock_user_manager.follow, "target.user", operation_name="フォロー"
+        )
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_follow_user_not_logged_in(self, mock_client_for_user_management):
+        """未ログイン状態でのフォローエラーテスト"""
+        client, mock_auth_manager, mock_error_handler, mock_user_manager = mock_client_for_user_management
+        
+        # 未ログイン状態設定
+        mock_auth_manager.is_logged_in = False
+        
+        with pytest.raises(Exception, match="フォローにはログインが必要です"):
+            client.follow("target.user")
+        
+        mock_error_handler.safe_api_call.assert_not_called()
+    
+    @pytest.mark.unit
+    def test_unfollow_user_success(self, mock_client_for_user_management):
+        """ユーザーフォロー解除成功テスト"""
+        client, mock_auth_manager, mock_error_handler, mock_user_manager = mock_client_for_user_management
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"success": True}
+        mock_error_handler.safe_api_call.return_value = expected_result
+        
+        result = client.unfollow("target.user")
+        
+        mock_error_handler.safe_api_call.assert_called_once_with(
+            mock_user_manager.unfollow, "target.user", operation_name="フォロー解除"
+        )
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_block_user_success(self, mock_client_for_user_management):
+        """ユーザーブロック成功テスト"""
+        client, mock_auth_manager, mock_error_handler, mock_user_manager = mock_client_for_user_management
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://block/123"}
+        mock_error_handler.safe_api_call.return_value = expected_result
+        
+        result = client.block("target.user")
+        
+        mock_error_handler.safe_api_call.assert_called_once_with(
+            mock_user_manager.block, "target.user", operation_name="ブロック"
+        )
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_mute_user_success(self, mock_client_for_user_management):
+        """ユーザーミュート成功テスト"""
+        client, mock_auth_manager, mock_error_handler, mock_user_manager = mock_client_for_user_management
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://mute/123"}
+        mock_error_handler.safe_api_call.return_value = expected_result
+        
+        result = client.mute("target.user")
+        
+        mock_error_handler.safe_api_call.assert_called_once_with(
+            mock_user_manager.mute, "target.user", operation_name="ミュート"
+        )
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_get_following_success(self, mock_client_for_user_management):
+        """フォロー中ユーザー一覧取得成功テスト"""
+        client, mock_auth_manager, mock_error_handler, mock_user_manager = mock_client_for_user_management
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"follows": [{"handle": "user1"}, {"handle": "user2"}]}
+        mock_error_handler.handle_with_auth_check.return_value = expected_result
+        
+        result = client.get_following("test.user", limit=50, cursor="cursor123")
+        
+        mock_error_handler.handle_with_auth_check.assert_called_once_with(
+            mock_user_manager.get_following, "test.user", 50, "cursor123",
+            operation_name="フォロー中ユーザー一覧取得"
+        )
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_get_blocked_users_success(self, mock_client_for_user_management):
+        """ブロックしたユーザー一覧取得成功テスト"""
+        client, mock_auth_manager, mock_error_handler, mock_user_manager = mock_client_for_user_management
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"blocks": [{"handle": "blocked1"}, {"handle": "blocked2"}]}
+        mock_error_handler.handle_with_auth_check.return_value = expected_result
+        
+        result = client.get_blocked_users(limit=25)
+        
+        mock_error_handler.handle_with_auth_check.assert_called_once_with(
+            mock_user_manager.get_blocked_users, 25, None,
+            operation_name="ブロックしたユーザー一覧取得"
+        )
+        assert result == expected_result
+
+
+class TestBlueskyClientAdvancedFeatures:
+    """BlueskyClient 高度な機能テスト"""
+    
+    @pytest.fixture
+    def mock_client_for_advanced(self):
+        """高度な機能用モッククライアント"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            
+            client = BlueskyClient()
+            return client, mock_api_client, mock_auth_manager
+    
+    @pytest.mark.unit
+    def test_quote_post_advanced_success(self, mock_client_for_advanced):
+        """高度な引用投稿成功テスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_advanced
+        
+        # ログイン状態設定
+        mock_auth_manager.is_logged_in = True
+        
+        expected_result = {"uri": "at://test.user/app.bsky.feed.post/advquote123"}
+        mock_api_client.quote_post_advanced.return_value = expected_result
+        
+        quote_of_data = {"uri": "at://quoted/post", "cid": "quoted_cid", "metadata": {"advanced": True}}
+        result = client.quote_post_advanced("Advanced quote comment", quote_of_data)
+        
+        mock_api_client.quote_post_advanced.assert_called_once_with("Advanced quote comment", quote_of_data)
+        assert result == expected_result
+    
+    @pytest.mark.unit
+    def test_quote_post_advanced_not_logged_in(self, mock_client_for_advanced):
+        """未ログイン状態での高度な引用投稿エラーテスト"""
+        client, mock_api_client, mock_auth_manager = mock_client_for_advanced
+        
+        # 未ログイン状態設定
+        mock_auth_manager.is_logged_in = False
+        
+        with pytest.raises(Exception, match="引用にはログインが必要です"):
+            client.quote_post_advanced("Comment", {"uri": "test"})
+        
+        mock_api_client.quote_post_advanced.assert_not_called()
+
+
+class TestBlueskyClientLoggingIntegration:
+    """BlueskyClient ログ統合テスト"""
+    
+    @pytest.mark.unit
+    def test_logging_integration_timeline_error(self, caplog):
+        """タイムライン取得エラー時のログ出力テスト"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            mock_auth_manager.is_logged_in = False
+            
+            client = BlueskyClient()
+            
+            with caplog.at_level(logging.ERROR):
+                try:
+                    client.get_timeline()
+                except Exception:
+                    pass
+            
+            # ログメッセージが出力されることを確認
+            assert "タイムラインの取得に失敗しました: ログインしていません" in caplog.text
+    
+    @pytest.mark.unit 
+    def test_logging_integration_post_error(self, caplog):
+        """投稿送信エラー時のログ出力テスト"""
+        from core.client.facade import BlueskyClient
+        
+        with patch('core.client.facade.BlueskyApiClient') as mock_api_client_class, \
+             patch('core.client.facade.BlueskySessionManager'), \
+             patch('core.client.facade.BlueskyAuthManager') as mock_auth_manager_class, \
+             patch('core.client.facade.UnifiedErrorHandler'), \
+             patch('core.client.facade.BlueskyUserManager'):
+            
+            mock_api_client = Mock()
+            mock_api_client_class.return_value = mock_api_client
+            
+            mock_auth_manager = Mock()
+            mock_auth_manager_class.return_value = mock_auth_manager
+            mock_auth_manager.is_logged_in = True
+            
+            # AtProtocolErrorをシミュレート
+            api_error = AtProtocolError("API error occurred")
+            mock_api_client.send_post.side_effect = api_error
+            
+            client = BlueskyClient()
+            
+            with caplog.at_level(logging.ERROR):
+                try:
+                    client.send_post("Test post")
+                except Exception:
+                    pass
+            
+            # ログメッセージが出力されることを確認
+            assert "投稿時にBluesky APIエラー" in caplog.text

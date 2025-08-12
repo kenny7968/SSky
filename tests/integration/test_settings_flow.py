@@ -45,6 +45,8 @@ class TestSettingsFlowIntegration:
             SettingsManager._instance = None
         
         new_manager = SettingsManager()
+        new_manager.settings_file = components['config_file']
+        new_manager.load()
         persisted_interval = new_manager.get("timeline_refresh_interval")
         assert persisted_interval == new_interval
     
@@ -79,6 +81,8 @@ class TestSettingsFlowIntegration:
             SettingsManager._instance = None
         
         new_manager = SettingsManager()
+        new_manager.settings_file = components['config_file']
+        new_manager.load()
         for key, expected_value in updates.items():
             persisted_value = new_manager.get(key)
             assert persisted_value == expected_value
@@ -91,12 +95,16 @@ class TestSettingsFlowIntegration:
         # 観察者の設定
         observer_calls = []
         
-        def test_observer(key, old_value, new_value):
-            observer_calls.append({
-                'key': key,
-                'old_value': old_value,
-                'new_value': new_value
-            })
+        class TestObserver:
+            def on_settings_changed(self, key):
+                # 現在の値を取得
+                new_value = settings_manager.get(key)
+                observer_calls.append({
+                    'key': key,
+                    'new_value': new_value
+                })
+        
+        test_observer = TestObserver()
         
         # 観察者を登録
         settings_manager.add_observer(test_observer)
@@ -110,7 +118,6 @@ class TestSettingsFlowIntegration:
         assert len(observer_calls) == 1
         call = observer_calls[0]
         assert call['key'] == "timeline_refresh_interval"
-        assert call['old_value'] == old_value
         assert call['new_value'] == new_value
         
         # 観察者を削除
@@ -207,11 +214,8 @@ class TestSettingsFlowIntegration:
             if hasattr(settings_manager, 'reload'):
                 settings_manager.reload()
             else:
-                # 新しいインスタンスを作成
-                from config.settings_manager import SettingsManager
-                if hasattr(SettingsManager, '_instance'):
-                    SettingsManager._instance = None
-                settings_manager = SettingsManager()
+                # 設定ファイルから再読み込み
+                settings_manager.load()
             
             # 初期値に戻ることを確認
             assert settings_manager.get("timeline_refresh_interval") == initial_settings["timeline_refresh_interval"]
@@ -299,30 +303,31 @@ class TestSettingsFlowWithRealFile:
         """実際のファイルでの設定永続化テスト"""
         settings_file, initial_settings = real_settings_file
         
-        with patch('config.settings_manager.SettingsManager._get_settings_file_path') as mock_path:
-            mock_path.return_value = settings_file
-            
-            # 最初のSettingsManagerインスタンス
-            from config.settings_manager import SettingsManager
-            if hasattr(SettingsManager, '_instance'):
-                SettingsManager._instance = None
-            
-            manager1 = SettingsManager()
-            
-            # 設定を変更
-            manager1.set("timeline_refresh_interval", 300)
-            manager1.set("theme", "dark")
-            manager1.save()
-            
-            # 新しいインスタンスで変更が永続化されていることを確認
-            if hasattr(SettingsManager, '_instance'):
-                SettingsManager._instance = None
-            
-            manager2 = SettingsManager()
-            
-            assert manager2.get("timeline_refresh_interval") == 300
-            assert manager2.get("theme") == "dark"
-            assert manager2.get("max_posts_display") == initial_settings["max_posts_display"]  # 変更されていない設定
+        # 最初のSettingsManagerインスタンス
+        from config.settings_manager import SettingsManager
+        if hasattr(SettingsManager, '_instance'):
+            SettingsManager._instance = None
+        
+        manager1 = SettingsManager()
+        manager1.settings_file = settings_file
+        manager1.load()
+        
+        # 設定を変更
+        manager1.set("timeline_refresh_interval", 300)
+        manager1.set("theme", "dark")
+        manager1.save()
+        
+        # 新しいインスタンスで変更が永続化されていることを確認
+        if hasattr(SettingsManager, '_instance'):
+            SettingsManager._instance = None
+        
+        manager2 = SettingsManager()
+        manager2.settings_file = settings_file
+        manager2.load()
+        
+        assert manager2.get("timeline_refresh_interval") == 300
+        assert manager2.get("theme") == "dark"
+        assert manager2.get("max_posts_display") == initial_settings["max_posts_display"]  # 変更されていない設定
     
     def test_real_file_corruption_handling(self, real_settings_file):
         """設定ファイルの破損処理テスト"""
@@ -332,26 +337,25 @@ class TestSettingsFlowWithRealFile:
         with open(settings_file, 'w', encoding='utf-8') as f:
             f.write("invalid json content")
         
-        with patch('config.settings_manager.SettingsManager._get_settings_file_path') as mock_path:
-            mock_path.return_value = settings_file
+        from config.settings_manager import SettingsManager
+        if hasattr(SettingsManager, '_instance'):
+            SettingsManager._instance = None
+        
+        try:
+            manager = SettingsManager()
+            manager.settings_file = settings_file
+            manager.load()
+            # 破損したファイルがあってもインスタンス作成は成功するか、
+            # またはデフォルト設定で動作することを確認
             
-            from config.settings_manager import SettingsManager
-            if hasattr(SettingsManager, '_instance'):
-                SettingsManager._instance = None
+            # デフォルト値が取得できることを確認
+            default_value = manager.get("timeline_refresh_interval", 30)
+            assert isinstance(default_value, int)
             
-            try:
-                manager = SettingsManager()
-                # 破損したファイルがあってもインスタンス作成は成功するか、
-                # またはデフォルト設定で動作することを確認
-                
-                # デフォルト値が取得できることを確認
-                default_value = manager.get("timeline_refresh_interval", 30)
-                assert isinstance(default_value, int)
-                
-            except Exception as e:
-                # エラーハンドリングが適切に行われることを確認
-                # 実装によってはエラーが発生することも許容
-                assert isinstance(e, (json.JSONDecodeError, FileNotFoundError, ValueError))
+        except Exception as e:
+            # エラーハンドリングが適切に行われることを確認
+            # 実装によってはエラーが発生することも許容
+            assert isinstance(e, (json.JSONDecodeError, FileNotFoundError, ValueError))
 
 
 @pytest.mark.integration
@@ -397,17 +401,24 @@ class TestSettingsFlowPerformance:
         # 複数の観察者を登録
         notification_count = 0
         
-        def observer1(key, old_value, new_value):
-            nonlocal notification_count
-            notification_count += 1
+        class TestObserver1:
+            def on_settings_changed(self, key):
+                nonlocal notification_count
+                notification_count += 1
         
-        def observer2(key, old_value, new_value):
-            nonlocal notification_count
-            notification_count += 1
+        class TestObserver2:
+            def on_settings_changed(self, key):
+                nonlocal notification_count
+                notification_count += 1
         
-        def observer3(key, old_value, new_value):
-            nonlocal notification_count
-            notification_count += 1
+        class TestObserver3:
+            def on_settings_changed(self, key):
+                nonlocal notification_count
+                notification_count += 1
+        
+        observer1 = TestObserver1()
+        observer2 = TestObserver2()
+        observer3 = TestObserver3()
         
         settings_manager.add_observer(observer1)
         settings_manager.add_observer(observer2)

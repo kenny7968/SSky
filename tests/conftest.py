@@ -258,6 +258,12 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "gui: mark test as gui test")
     config.addinivalue_line("markers", "network: mark test requiring network")
     config.addinivalue_line("markers", "windows: mark test requiring Windows")
+    config.addinivalue_line("markers", "e2e: mark test as end-to-end test")
+    config.addinivalue_line("markers", "performance: mark test as performance test")
+    config.addinivalue_line("markers", "contract_schema: mark test as contract schema test")
+    config.addinivalue_line("markers", "contract_api: mark test as contract API test")
+    config.addinivalue_line("markers", "contract_data: mark test as contract data test")
+    config.addinivalue_line("markers", "contract_interface: mark test as contract interface test")
 
 
 def pytest_collection_modifyitems(config, items):
