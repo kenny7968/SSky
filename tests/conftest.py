@@ -94,7 +94,8 @@ def mock_crypto():
          patch('utils.crypto.decrypt_data') as mock_decrypt:
         
         mock_encrypt.return_value = b'encrypted_test_data'
-        mock_decrypt.return_value = 'decrypted_test_data'
+        # 有効なJSON文字列を返すように修正
+        mock_decrypt.return_value = '{"username": "test@bsky.social", "password": "testpass", "session_data": {"access_token": "test_token"}}'
         
         yield {
             'encrypt': mock_encrypt,
