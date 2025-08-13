@@ -42,7 +42,10 @@ def temp_data_dir():
 @pytest.fixture
 def temp_db_file(temp_data_dir):
     """テスト用一時データベースファイル"""
-    db_file = temp_data_dir / "test_database.sqlite"
+    import uuid
+    # 各テストで一意のデータベースファイル名を生成
+    unique_name = f"test_database_{uuid.uuid4().hex[:8]}.sqlite"
+    db_file = temp_data_dir / unique_name
     yield str(db_file)
     # クリーンアップはtempDirによって自動実行
 
