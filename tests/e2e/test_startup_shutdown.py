@@ -73,10 +73,10 @@ class TestApplicationLifecycle:
             sessions_table = cursor.fetchone()
             assert sessions_table is not None, "sessionsテーブルが作成されていません"
             
-            # credentials テーブルの存在確認
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='credentials'")
-            credentials_table = cursor.fetchone()
-            assert credentials_table is not None, "credentialsテーブルが作成されていません"
+            # users テーブルの存在確認
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+            users_table = cursor.fetchone()
+            assert users_table is not None, "usersテーブルが作成されていません"
     
     @pytest.mark.e2e_smoke
     def test_settings_initialization_on_startup(self, e2e_app_components, e2e_application_lifecycle):
@@ -87,9 +87,9 @@ class TestApplicationLifecycle:
         settings_manager = e2e_app_components['settings_manager']
         
         # デフォルト設定の確認
-        assert settings_manager.get('timeline_refresh_interval') is not None, "timeline_refresh_intervalが設定されていません"
-        assert settings_manager.get('max_posts_display') is not None, "max_posts_displayが設定されていません"
-        assert settings_manager.get('language') is not None, "languageが設定されていません"
+        assert settings_manager.get('timeline.fetch_interval') is not None, "timeline.fetch_intervalが設定されていません"
+        assert settings_manager.get('timeline.fetch_count') is not None, "timeline.fetch_countが設定されていません"
+        assert settings_manager.get('language.locale') is not None, "language.localeが設定されていません"
     
     @pytest.mark.e2e_full
     def test_startup_with_existing_data(self, e2e_app_components, e2e_application_lifecycle):
@@ -100,6 +100,7 @@ class TestApplicationLifecycle:
         data_store = e2e_app_components['data_store']
         
         # テストデータ挿入
+        import json
         test_session_data = {
             'handle': 'test.user',
             'access_jwt': 'test_access_token',
@@ -107,18 +108,22 @@ class TestApplicationLifecycle:
             'did': 'did:plc:testuser123'
         }
         
-        with data_store.get_connection() as conn:
-            data_store.save_session(conn, **test_session_data)
+        encrypted_session = json.dumps(test_session_data).encode('utf-8')
+        data_store.save_session('did:plc:testuser123', encrypted_session)
         
         # アプリケーション再起動
         e2e_application_lifecycle.restart_app(e2e_app_components)
         
         # 既存データの読み込み確認
-        with data_store.get_connection() as conn:
-            loaded_session = data_store.get_latest_session(conn, 'test.user')
-            
-            assert loaded_session is not None, "既存セッションデータが読み込まれていません"
-            assert loaded_session['handle'] == 'test.user', "セッションデータが正しく読み込まれていません"
+        user_did, loaded_session = data_store.get_latest_session()
+        
+        assert loaded_session is not None, "既存セッションデータが読み込まれていません"
+        assert user_did == 'did:plc:testuser123', "DIDが正しく読み込まれていません"
+        
+        # セッションデータをデコードして検証
+        import json
+        session_data = json.loads(loaded_session.decode('utf-8'))
+        assert session_data['handle'] == 'test.user', "セッションデータが正しく読み込まれていません"
 
 
 class TestComponentIntegration:

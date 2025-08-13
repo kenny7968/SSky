@@ -301,8 +301,9 @@ def gui_backend_components(gui_test_environment, comprehensive_wx_mock):
 def gui_app_instance(gui_backend_components):
     """GUIアプリケーションインスタンス"""
     
-    # SSkyAppのモック
-    with patch('gui.app.SSkyApp') as mock_app_class:
+    # SSkyAppのモック - 正しいインポートパスを使用
+    import gui.app
+    with patch.object(gui.app, 'SSkyApp') as mock_app_class:
         mock_app = MagicMock()
         mock_app_class.return_value = mock_app
         
@@ -368,16 +369,20 @@ def gui_dialog_mocks(gui_backend_components):
     mocks = {}
     
     # ログインダイアログ
-    with patch('gui.dialogs.login_dialog.LoginDialog') as mock_login_class:
+    with patch('gui.dialogs.login_dialog.LoginDialog') as mock_login_class, \
+         patch('gui.dialogs.post_dialog.PostDialog') as mock_post_class, \
+         patch('gui.dialogs.settings_dialog.SettingsDialog') as mock_settings_class, \
+         patch('gui.dialogs.error_dialog.ErrorDialog') as mock_error_class:
+        
+        # ログインダイアログ設定
         mock_login = MagicMock()
         mock_login_class.return_value = mock_login
         mock_login.ShowModal.return_value = gui_backend_components['wx'].OK
         mock_login.GetCredentials.return_value = ("test.user", "test_password")
         mocks['login_dialog'] = mock_login
         mocks['login_dialog_class'] = mock_login_class
-    
-    # 投稿ダイアログ
-    with patch('gui.dialogs.post_dialog.PostDialog') as mock_post_class:
+        
+        # 投稿ダイアログ設定
         mock_post = MagicMock()
         mock_post_class.return_value = mock_post
         mock_post.ShowModal.return_value = gui_backend_components['wx'].OK
@@ -385,9 +390,8 @@ def gui_dialog_mocks(gui_backend_components):
         mock_post.GetSelectedImages.return_value = []
         mocks['post_dialog'] = mock_post
         mocks['post_dialog_class'] = mock_post_class
-    
-    # 設定ダイアログ
-    with patch('gui.dialogs.settings_dialog.SettingsDialog') as mock_settings_class:
+        
+        # 設定ダイアログ設定
         mock_settings = MagicMock()
         mock_settings_class.return_value = mock_settings
         mock_settings.ShowModal.return_value = gui_backend_components['wx'].OK
@@ -397,16 +401,15 @@ def gui_dialog_mocks(gui_backend_components):
         }
         mocks['settings_dialog'] = mock_settings
         mocks['settings_dialog_class'] = mock_settings_class
-    
-    # エラーダイアログ
-    with patch('gui.dialogs.error_dialog.ErrorDialog') as mock_error_class:
+        
+        # エラーダイアログ設定
         mock_error = MagicMock()
         mock_error_class.return_value = mock_error
         mock_error.ShowModal.return_value = gui_backend_components['wx'].OK
         mocks['error_dialog'] = mock_error
         mocks['error_dialog_class'] = mock_error_class
-    
-    yield mocks
+        
+        yield mocks
 
 
 @pytest.fixture

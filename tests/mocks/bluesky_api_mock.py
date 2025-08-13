@@ -240,6 +240,9 @@ class BlueskyApiClientMock:
         if not self.is_logged_in:
             raise BlueskyApiMockData.generate_error_response("forbidden", "Not logged in")
         
+        if not text or not text.strip():
+            raise BlueskyApiMockData.generate_error_response("invalid_request", "Text cannot be empty")
+        
         if len(text) > 280:
             raise BlueskyApiMockData.generate_error_response("invalid_request", "Text too long")
         

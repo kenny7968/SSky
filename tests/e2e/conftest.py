@@ -121,24 +121,10 @@ def e2e_mock_bluesky_api():
         "description": "E2Eテスト用プロフィール"
     }
     
-    # AtprotoClientのモック
-    with patch('core.client.api_client.AtprotoClient') as mock_client_class:
-        mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
-        
-        # API呼び出しのモック設定
-        mock_client.login.return_value = True
-        mock_client.get_profile.return_value = sample_profile
-        mock_client.get_timeline.return_value = Mock(feed=sample_timeline)
-        mock_client.send_post.return_value = Mock(uri="at://test.user/app.bsky.feed.post/new")
-        mock_client.upload_blob.return_value = Mock(ref="test_blob_ref")
-        
-        yield {
-            'client_class': mock_client_class,
-            'client': mock_client,
-            'sample_timeline': sample_timeline,
-            'sample_profile': sample_profile
-        }
+    return {
+        'sample_timeline': sample_timeline,
+        'sample_profile': sample_profile
+    }
 
 
 @pytest.fixture
@@ -171,21 +157,42 @@ def e2e_app_components(e2e_temp_environment, e2e_mock_wx_app, e2e_mock_bluesky_a
             credential_manager = AuthCredentialManager()
             components['credential_manager'] = credential_manager
         
-        # BlueskyClient の初期化（モックAPI付き）
-        from core.client.facade import BlueskyClient
-        bluesky_client = BlueskyClient()
-        components['bluesky_client'] = bluesky_client
-        
-        # 設定マネージャーの初期化
-        from config.settings_manager import SettingsManager
-        SettingsManager._instance = None
-        settings_manager = SettingsManager()
-        settings_manager.settings_file = e2e_temp_environment['config_file']
-        components['settings_manager'] = settings_manager
-        
-        # モックデータ
-        components.update(e2e_mock_bluesky_api)
-        components.update(e2e_mock_wx_app)
+        # BlueskyApiClientとAtprotoClientをモック
+        with patch('core.client.api_client.BlueskyApiClient') as mock_api_class, \
+             patch('core.client.api_client.AtprotoClient') as mock_atproto_class:
+            
+            # AtprotoClientモックの設定
+            mock_atproto = MagicMock()
+            mock_atproto_class.return_value = mock_atproto
+            
+            # APIモックの設定
+            mock_api = MagicMock()
+            mock_api_class.return_value = mock_api
+            mock_api.client = mock_atproto
+            
+            # メソッドのモック設定
+            mock_atproto.login.return_value = e2e_mock_bluesky_api['sample_profile']
+            mock_atproto.get_profile.return_value = e2e_mock_bluesky_api['sample_profile']
+            mock_api.get_timeline.return_value = {'feed': e2e_mock_bluesky_api['sample_timeline']}
+            mock_api.send_post.return_value = {"uri": "at://test.user/app.bsky.feed.post/new"}
+            mock_api.get_profile.return_value = e2e_mock_bluesky_api['sample_profile']
+            
+            # BlueskyClient の初期化
+            from core.client.facade import BlueskyClient
+            bluesky_client = BlueskyClient()
+            components['bluesky_client'] = bluesky_client
+            components['client'] = mock_atproto  # テストがAPIクライアントを参照できるように
+            
+            # 設定マネージャーの初期化
+            from config.settings_manager import SettingsManager
+            SettingsManager._instance = None
+            settings_manager = SettingsManager()
+            settings_manager.settings_file = e2e_temp_environment['config_file']
+            components['settings_manager'] = settings_manager
+            
+            # モックデータ
+            components.update(e2e_mock_bluesky_api)
+            components.update(e2e_mock_wx_app)
         
         yield components
         

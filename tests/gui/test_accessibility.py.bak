@@ -303,24 +303,28 @@ class TestAccessibilitySettings:
         settings_manager = gui_backend_components['settings_manager']
         accessibility = gui_accessibility_mock
         
-        # アクセシビリティ設定
-        accessibility_settings = {
-            "enable_screen_reader": True,
-            "high_contrast_mode": False,
-            "font_size_multiplier": 1.2,
-            "enable_keyboard_shortcuts": True,
-            "announce_notifications": True,
-            "focus_announcements": True
-        }
+        # settings_managerのsaveメソッドをモック化
+        from unittest.mock import patch
         
-        # 設定保存
-        for key, value in accessibility_settings.items():
-            settings_manager.set(f"accessibility.{key}", value)
-        
-        settings_manager.save()
-        
-        # 設定が保存されたことを確認
-        settings_manager.save.assert_called()
+        with patch.object(settings_manager, 'save') as mock_save:
+            # アクセシビリティ設定
+            accessibility_settings = {
+                "enable_screen_reader": True,
+                "high_contrast_mode": False,
+                "font_size_multiplier": 1.2,
+                "enable_keyboard_shortcuts": True,
+                "announce_notifications": True,
+                "focus_announcements": True
+            }
+            
+            # 設定保存
+            for key, value in accessibility_settings.items():
+                settings_manager.set(f"accessibility.{key}", value)
+            
+            settings_manager.save()
+            
+            # 設定が保存されたことを確認
+            mock_save.assert_called()
     
     @pytest.mark.gui_accessibility
     def test_accessibility_preferences_load(self, gui_backend_components, gui_accessibility_mock):
@@ -329,31 +333,34 @@ class TestAccessibilitySettings:
         accessibility = gui_accessibility_mock
         
         # 設定読み込みシミュレーション
-        settings_manager.get.side_effect = lambda key: {
+        from unittest.mock import patch
+        
+        test_settings = {
             "accessibility.enable_screen_reader": True,
             "accessibility.high_contrast_mode": True,
             "accessibility.font_size_multiplier": 1.5,
             "accessibility.enable_keyboard_shortcuts": True
-        }.get(key, None)
+        }
         
-        # 設定に基づくアクセシビリティ機能適用
-        if settings_manager.get("accessibility.high_contrast_mode"):
-            accessibility.apply_high_contrast()
-        
-        if settings_manager.get("accessibility.enable_keyboard_shortcuts"):
-            accessibility.enable_keyboard_navigation()
-        
-        font_multiplier = settings_manager.get("accessibility.font_size_multiplier")
-        if font_multiplier and font_multiplier > 1.0:
-            # フォントサイズ調整
-            adjustment_steps = int((font_multiplier - 1.0) * 10)
-            for _ in range(adjustment_steps):
-                accessibility.increase_font_size()
-        
-        # 設定に基づいて適切な機能が有効化されたことを確認
-        accessibility.apply_high_contrast.assert_called()
-        accessibility.enable_keyboard_navigation.assert_called()
-        assert accessibility.increase_font_size.call_count >= 5  # 1.5倍 = 5回拡大
+        with patch.object(settings_manager, 'get', side_effect=lambda key: test_settings.get(key, None)) as mock_get:
+            # 設定に基づくアクセシビリティ機能適用
+            if settings_manager.get("accessibility.high_contrast_mode"):
+                accessibility.apply_high_contrast()
+            
+            if settings_manager.get("accessibility.enable_keyboard_shortcuts"):
+                accessibility.enable_keyboard_navigation()
+            
+            font_multiplier = settings_manager.get("accessibility.font_size_multiplier")
+            if font_multiplier and font_multiplier > 1.0:
+                # フォントサイズ調整
+                adjustment_steps = int((font_multiplier - 1.0) * 10)
+                for _ in range(adjustment_steps):
+                    accessibility.increase_font_size()
+            
+            # 設定に基づいて適切な機能が有効化されたことを確認
+            accessibility.apply_high_contrast.assert_called()
+            accessibility.enable_keyboard_navigation.assert_called()
+            assert accessibility.increase_font_size.call_count >= 5  # 1.5倍 = 5回拡大
     
     @pytest.mark.gui_accessibility
     def test_accessibility_system_detection(self, comprehensive_wx_mock, gui_accessibility_mock):

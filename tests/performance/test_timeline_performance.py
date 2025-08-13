@@ -440,74 +440,68 @@ class TestDatabasePerformance:
     
     def test_bulk_data_insertion_performance(self, temp_db_file):
         """大量データ挿入性能テスト"""
-        with patch('core.data_store.sqlite3') as mock_sqlite:
-            import sqlite3
-            
-            # 実際のSQLite接続を使用
-            real_connection = sqlite3.connect(":memory:")
-            mock_sqlite.connect.return_value = real_connection
-            
-            # テーブル作成
-            cursor = real_connection.cursor()
+        import sqlite3
+        
+        # 実際のSQLite接続を使用
+        real_connection = sqlite3.connect(":memory:")
+        
+        # テーブル作成
+        cursor = real_connection.cursor()
+        cursor.execute("""
+            CREATE TABLE test_posts (
+                id INTEGER PRIMARY KEY,
+                uri TEXT NOT NULL,
+                author_handle TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at DATETIME NOT NULL,
+                indexed_at DATETIME NOT NULL
+            )
+        """)
+        real_connection.commit()
+        
+        # 大量データの準備
+        test_posts = [PostFactory() for _ in range(1000)]
+        
+        # 一括挿入の性能測定
+        start_time = time.time()
+        
+        for post in test_posts:
             cursor.execute("""
-                CREATE TABLE test_posts (
-                    id INTEGER PRIMARY KEY,
-                    uri TEXT NOT NULL,
-                    author_handle TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    created_at DATETIME NOT NULL,
-                    indexed_at DATETIME NOT NULL
-                )
-            """)
-            real_connection.commit()
-            
-            from core.data_store import DataStore
-            data_store = DataStore(":memory:")
-            data_store.connection = real_connection
-            
-            # 大量データの準備
-            test_posts = [PostFactory() for _ in range(1000)]
-            
-            # 一括挿入の性能測定
-            start_time = time.time()
-            
-            for post in test_posts:
-                cursor.execute("""
-                    INSERT INTO test_posts (uri, author_handle, content, created_at, indexed_at)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (
-                    post['uri'],
-                    post['author']['handle'],
-                    post['record']['text'][:500],  # 長すぎるテキストは切り取り
-                    post['record']['createdAt'],
-                    post['indexedAt']
-                ))
-            
-            real_connection.commit()
-            end_time = time.time()
-            
-            # 性能評価
-            insertion_time = end_time - start_time
-            insertions_per_second = len(test_posts) / insertion_time
-            
-            # 挿入されたデータの確認
-            cursor.execute("SELECT COUNT(*) FROM test_posts")
-            inserted_count = cursor.fetchone()[0]
-            
-            # 結果検証
-            assert inserted_count == len(test_posts)
-            
-            # 性能基準
-            assert insertion_time < 5.0, f"大量挿入時間が遅すぎます: {insertion_time:.2f}秒"
-            assert insertions_per_second > 100, f"挿入速度が遅すぎます: {insertions_per_second:.1f}件/秒"
-            
-            # レポート出力
-            print(f"\n=== データベース挿入性能レポート ===")
-            print(f"挿入件数: {len(test_posts)}")
-            print(f"実行時間: {insertion_time:.3f}秒")
-            print(f"挿入速度: {insertions_per_second:.1f}件/秒")
-            
-            real_connection.close()
+                INSERT INTO test_posts (uri, author_handle, content, created_at, indexed_at)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                post['uri'],
+                post['author']['handle'],
+                post['record']['text'][:500],  # 長すぎるテキストは切り取り
+                post['record']['createdAt'],
+                post['indexedAt']
+            ))
+        
+        real_connection.commit()
+        end_time = time.time()
+        
+        # 性能評価
+        insertion_time = end_time - start_time
+        insertions_per_second = len(test_posts) / insertion_time
+        
+        # 挿入されたデータの確認
+        cursor.execute("SELECT COUNT(*) FROM test_posts")
+        inserted_count = cursor.fetchone()[0]
+        
+        # 結果検証
+        assert inserted_count == len(test_posts)
+        
+        # 性能基準
+        assert insertion_time < 5.0, f"大量挿入時間が遅すぎます: {insertion_time:.2f}秒"
+        assert insertions_per_second > 100, f"挿入速度が遅すぎます: {insertions_per_second:.1f}件/秒"
+        
+        # レポート出力
+        print(f"\n=== データベース挿入性能レポート ===")
+        print(f"挿入件数: {len(test_posts)}")
+        print(f"実行時間: {insertion_time:.3f}秒")
+        print(f"挿入速度: {insertions_per_second:.1f}件/秒")
+        
+        real_connection.close()
     
     def test_complex_query_performance(self, temp_db_file):
         """複雑クエリ性能テスト"""
