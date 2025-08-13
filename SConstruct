@@ -49,8 +49,8 @@ os.makedirs(package_dir)
 
 # Function to build with PyInstaller
 def build_with_pyinstaller(target, source, env):
-    # Execute PyInstaller command
-    pyinstaller_cmd = 'pyinstaller --name SSky --noconsole --onedir --noupx --clean --noconfirm --log-level=INFO SSky.py'
+    # Execute PyInstaller command using spec file
+    pyinstaller_cmd = 'pyinstaller --clean --noconfirm --log-level=INFO SSky.spec'
     print(f"Executing: {pyinstaller_cmd}")
     ret = os.system(pyinstaller_cmd)
     
@@ -78,6 +78,12 @@ def copy_files_to_package(target, source, env):
                 shutil.copytree(src_path, dst_path)
             else:
                 shutil.copy2(src_path, dst_path)
+        
+        # Copy locales folder (for internationalization)
+        locales_src = 'locales'
+        locales_dst = os.path.join(package_dir, 'locales')
+        if os.path.exists(locales_src):
+            shutil.copytree(locales_src, locales_dst)
         
         # Copy manual folder
         manual_src = 'manual'
