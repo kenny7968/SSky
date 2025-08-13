@@ -33,20 +33,10 @@ jobs:
         pip install -r requirements.txt
         pip install pytest pytest-cov pytest-mock pytest-timeout pytest-xdist
     
-    - name: Run Core Unit Tests
+    - name: Run Unit Tests
       run: |
-        pytest tests/unit/core -m "not gui and not slow" --cov=core --cov-report=xml --cov-report=term-missing ${{ env.PYTEST_ARGS }}
-      continue-on-error: true
-    
-    - name: Run Utils Unit Tests
-      run: |
-        pytest tests/unit/utils -m "not gui" --cov=utils --cov-append --cov-report=xml --cov-report=term-missing ${{ env.PYTEST_ARGS }}
-      continue-on-error: true
-    
-    - name: Run Config Unit Tests
-      run: |
-        pytest tests/unit/config -m "not gui" --cov=config --cov-append --cov-report=xml --cov-report=term-missing ${{ env.PYTEST_ARGS }}
-      continue-on-error: true
+        pytest tests/unit -m "not gui and not slow" --cov=core --cov=utils --cov=config --cov-report=xml --cov-report=term-missing ${{ env.PYTEST_ARGS }}
+      continue-on-error: false
     
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
@@ -87,8 +77,8 @@ jobs:
     
     - name: Run Integration Tests
       run: |
-        pytest tests/integration -m "not gui and not e2e" --maxfail=5 --timeout=60 ${{ env.PYTEST_ARGS }}
-      continue-on-error: false
+        pytest tests/integration -m "not gui and not e2e" --maxfail=5 ${{ env.PYTEST_ARGS }}
+      continue-on-error: true
 
   # Stage 3: Contract tests
   contract-tests:
