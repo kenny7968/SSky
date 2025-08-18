@@ -19,7 +19,7 @@ jobs:
     steps:
       # 1. リポジトリのコードをチェックアウト
       - name: Check out code
-        uses: actions/checkout@v4 # バージョンは最新を確認してください
+        uses: actions/checkout@v5 # バージョンは最新を確認してください
 
       # 2. Python 環境をセットアップ (pre-commit 自体や Python ベースのフックに必要)
       - name: Set up Python
